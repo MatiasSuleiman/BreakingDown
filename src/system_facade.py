@@ -22,15 +22,22 @@ except ModuleNotFoundError:
 class System_Facade:
 
     @classmethod
-    def login(self, user, password):
-        return self(user,password)
+    def login(cls, user, password):
+        buscador = Buscador_adapter.login(user, password)
+        return cls.build(user, buscador)
 
-    def __init__(self, user, password):
+    @classmethod
+    def build(cls, user, buscador):
+        return cls(user, buscador)
+
+    builde = build
+
+    def __init__(self, user, buscador):
         self.abogado_a_cargo = user
         self.mails_encontrados = []
         self.mails_del_breakdown = []
         self.descripcion_por_mail = {}
-        self.buscador = Buscador_adapter.login(user, password)
+        self.buscador = buscador
         self.condiciones = []
 
     def buscar_de_a_partes(self, asunto):

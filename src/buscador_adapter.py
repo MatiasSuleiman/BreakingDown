@@ -45,10 +45,11 @@ class Buscador_adapter:
         "[Gmail]/Enviados": ("[Gmail]/Enviados", "[Gmail]/Sent Mail"),
     }
 
-    def __init__(self, mailbox, user, password):
+    def __init__(self, mailbox, user, password=None, sesion_google=None):
         self.mailbox = mailbox
         self.user = user
         self.password = password
+        self.sesion_google = sesion_google
         self.carpeta_actual = "INBOX"
 
     @classmethod
@@ -67,8 +68,40 @@ class Buscador_adapter:
                 time.sleep(delay_s)
         raise last_error
 
+    @classmethod
+    def login_con_oauth2(cls, sesion_google, retries=3, delay_s=1, folder="INBOX"):
+        last_error = None
+        for _ in range(retries):
+            try:
+                mailbox = MailBox("imap.gmail.com").xoauth2(
+                    sesion_google.user,
+                    sesion_google.access_token(),
+                    folder,
+                )
+                return cls(
+                    mailbox,
+                    sesion_google.user,
+                    sesion_google=sesion_google,
+                )
+            except (UnexpectedCommandStatusError, imaplib.IMAP4.error) as error:
+                if es_error_de_autenticacion(error):
+                    sesion_google.refrescar()
+                    last_error = error
+                    continue
+                raise
+            except socket.gaierror as error:
+                last_error = error
+                time.sleep(delay_s)
+        raise last_error
+
     def relogin_en(self, folder):
-        nuevo_buscador = self.__class__.login(self.user, self.password, folder=folder)
+        if self.sesion_google is not None:
+            nuevo_buscador = self.__class__.login_con_oauth2(
+                self.sesion_google,
+                folder=folder,
+            )
+        else:
+            nuevo_buscador = self.__class__.login(self.user, self.password, folder=folder)
         self.mailbox = nuevo_buscador.mailbox
 
     def cambiar_carpeta(self, carpeta):

@@ -1,0 +1,194 @@
+from pathlib import Path
+from tempfile import TemporaryDirectory
+import json
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from google_oauth import (
+    CANONICAL_EMAIL_SCOPE,
+    LEGACY_EMAIL_SCOPE,
+    SCOPES,
+    SesionGoogleOAuth,
+    borrar_credentials_guardadas,
+    cargar_credentials_guardadas,
+    cargar_sesion_guardada,
+    iniciar_sesion,
+    guardar_credentials,
+    obtener_user_de,
+    ruta_de_client_secret,
+)
+
+
+class FakeCredentials:
+    def __init__(self, token="token-123", valid=True, refresh_token="refresh-123"):
+        self.token = token
+        self.valid = valid
+        self.refresh_token = refresh_token
+        self.refreshed = False
+
+    def to_json(self):
+        return json.dumps({"token": self.token})
+
+    def refresh(self, _request):
+        self.valid = True
+        self.refreshed = True
+        self.token = "token-refrescado"
+
+
+def test_guardar_credentials_persiste_el_json():
+    credentials = FakeCredentials()
+
+    with TemporaryDirectory() as directory:
+        path = Path(directory) / "token.json"
+        guardar_credentials(credentials, path)
+
+        assert path.read_text(encoding="utf-8") == credentials.to_json()
+
+
+def test_sesion_google_refresca_y_actualiza_el_archivo(monkeypatch):
+    credentials = FakeCredentials(valid=False)
+    google_request = object()
+    monkeypatch.setattr(
+        "google_oauth.imports_de_google",
+        lambda: (lambda: google_request, object(), object()),
+    )
+
+    with TemporaryDirectory() as directory:
+        path = Path(directory) / "token.json"
+        sesion = SesionGoogleOAuth("lawyer@example.com", credentials, path)
+
+        assert sesion.access_token() == "token-refrescado"
+        assert credentials.refreshed is True
+        assert path.read_text(encoding="utf-8") == credentials.to_json()
+
+
+def test_obtener_user_de_lee_el_correo_desde_userinfo(monkeypatch):
+    class FakeResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self):
+            return b'{ "email": "lawyer@example.com" }'
+
+    monkeypatch.setattr("google_oauth.urlopen", lambda _request: FakeResponse())
+
+    user = obtener_user_de(FakeCredentials())
+
+    assert user == "lawyer@example.com"
+
+
+def test_ruta_de_client_secret_detecta_el_nombre_descargado_por_google(monkeypatch):
+    with TemporaryDirectory() as directory:
+        directorio = Path(directory)
+        archivo = directorio / "app_config" / "client_secret_demo.json"
+        archivo.parent.mkdir(parents=True, exist_ok=True)
+        archivo.write_text("{}", encoding="utf-8")
+
+        monkeypatch.delenv("BREAKINGDOWN_GOOGLE_CLIENT_SECRETS_FILE", raising=False)
+        monkeypatch.setattr("google_oauth.__file__", str(directorio / "google_oauth.py"))
+        monkeypatch.setattr("google_oauth.sys.executable", str(directorio / "python3"))
+        monkeypatch.delattr("google_oauth.sys._MEIPASS", raising=False)
+
+        assert ruta_de_client_secret() == archivo
+
+
+def test_ruta_de_client_secret_prefiere_google_client_secret_en_app_config(monkeypatch):
+    with TemporaryDirectory() as directory:
+        directorio = Path(directory)
+        archivo = directorio / "app_config" / "google_client_secret.json"
+        archivo.parent.mkdir(parents=True, exist_ok=True)
+        archivo.write_text("{}", encoding="utf-8")
+
+        monkeypatch.delenv("BREAKINGDOWN_GOOGLE_CLIENT_SECRETS_FILE", raising=False)
+        monkeypatch.setattr("google_oauth.__file__", str(directorio / "google_oauth.py"))
+        monkeypatch.setattr("google_oauth.sys.executable", str(directorio / "python3"))
+        monkeypatch.delattr("google_oauth.sys._MEIPASS", raising=False)
+
+        assert ruta_de_client_secret() == archivo
+
+
+def test_scopes_usan_el_scope_canonico_de_google():
+    assert CANONICAL_EMAIL_SCOPE in SCOPES
+    assert LEGACY_EMAIL_SCOPE not in SCOPES
+
+
+def test_cargar_credentials_guardadas_reintenta_con_scope_legacy(monkeypatch):
+    class FakeCredentialsLoader:
+        calls = []
+
+        @classmethod
+        def from_authorized_user_file(cls, path, scopes):
+            cls.calls.append((path, list(scopes)))
+            if scopes == SCOPES:
+                raise ValueError("scope mismatch")
+            return {"path": path, "scopes": list(scopes)}
+
+    monkeypatch.setattr(
+        "google_oauth.imports_de_google",
+        lambda: (object(), FakeCredentialsLoader, object()),
+    )
+
+    with TemporaryDirectory() as directory:
+        path = Path(directory) / "token.json"
+        path.write_text("{}", encoding="utf-8")
+
+        credentials = cargar_credentials_guardadas(path)
+
+    assert credentials == {
+        "path": str(path),
+        "scopes": ["openid", LEGACY_EMAIL_SCOPE, "https://mail.google.com/"],
+    }
+    assert FakeCredentialsLoader.calls == [
+        (str(path), SCOPES),
+        (str(path), ["openid", LEGACY_EMAIL_SCOPE, "https://mail.google.com/"]),
+    ]
+
+
+def test_borrar_credentials_guardadas_elimina_el_archivo():
+    with TemporaryDirectory() as directory:
+        path = Path(directory) / "token.json"
+        path.write_text("{}", encoding="utf-8")
+
+        borrar_credentials_guardadas(path)
+
+        assert path.exists() is False
+
+
+def test_cargar_sesion_guardada_devuelve_none_si_no_hay_token(monkeypatch):
+    with TemporaryDirectory() as directory:
+        path = Path(directory) / "token.json"
+        monkeypatch.setattr("google_oauth.ruta_de_token", lambda: path)
+
+        assert cargar_sesion_guardada() is None
+
+
+def test_iniciar_sesion_forzada_borra_el_token_y_crea_una_sesion_nueva(monkeypatch):
+    credenciales_nuevas = FakeCredentials(token="token-nuevo")
+
+    with TemporaryDirectory() as directory:
+        path = Path(directory) / "token.json"
+        path.write_text('{"token": "token-viejo"}', encoding="utf-8")
+
+        monkeypatch.setattr("google_oauth.ruta_de_token", lambda: path)
+        monkeypatch.setattr("google_oauth.cargar_sesion_guardada", lambda: None)
+        monkeypatch.setattr(
+            "google_oauth.flujo_local_desde_client_secret",
+            lambda _path: credenciales_nuevas,
+        )
+        monkeypatch.setattr(
+            "google_oauth.ruta_de_client_secret",
+            lambda: Path(directory) / "google_client_secret.json",
+        )
+        monkeypatch.setattr(
+            "google_oauth.obtener_user_de",
+            lambda credentials: "lawyer@example.com",
+        )
+
+        sesion = iniciar_sesion(forzar_nueva=True)
+
+        assert sesion.user == "lawyer@example.com"
+        assert path.read_text(encoding="utf-8") == credenciales_nuevas.to_json()

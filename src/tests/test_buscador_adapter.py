@@ -68,6 +68,21 @@ def make_mail(uid, subject, body="", message_id=None):
     )
 
 
+class FakeSesionGoogle:
+    def __init__(self, user="lawyer@example.com", token="google-token"):
+        self.user = user
+        self.token = token
+        self.access_token_calls = 0
+        self.refresh_calls = 0
+
+    def access_token(self):
+        self.access_token_calls += 1
+        return self.token
+
+    def refrescar_si_es_necesario(self):
+        self.refresh_calls += 1
+
+
 def test_encontrar_de_a_partes_busca_en_la_carpeta_actual():
     mailbox = FakeMailbox(
         {
@@ -172,3 +187,52 @@ def test_enviados_tiene_fallback_a_carpeta_en_espanol():
             "folder": "[Gmail]/Enviados",
         },
     ]
+
+
+def test_login_con_oauth2_usa_xoauth2(monkeypatch):
+    mailbox = FakeMailbox({"INBOX": []})
+    sesion_google = FakeSesionGoogle()
+
+    class FakeMailBoxFactory:
+        def __init__(self, _host):
+            pass
+
+        def xoauth2(self, user, access_token, folder):
+            assert user == "lawyer@example.com"
+            assert access_token == "google-token"
+            assert folder == "INBOX"
+            return mailbox
+
+    monkeypatch.setattr("buscador_adapter.MailBox", FakeMailBoxFactory)
+
+    buscador = Buscador_adapter.login_con_oauth2(sesion_google)
+
+    assert buscador.mailbox is mailbox
+    assert buscador.sesion_google is sesion_google
+    assert sesion_google.access_token_calls == 1
+
+
+def test_relogin_en_oauth2_reutiliza_la_sesion_google(monkeypatch):
+    mailbox_inicial = FakeMailbox({"INBOX": []})
+    mailbox_nuevo = FakeMailbox({"[Gmail]/Sent Mail": []})
+    sesion_google = FakeSesionGoogle()
+    buscador = Buscador_adapter(
+        mailbox_inicial,
+        sesion_google.user,
+        sesion_google=sesion_google,
+    )
+
+    def fake_login_con_oauth2(sesion_recibida, retries=3, delay_s=1, folder="INBOX"):
+        assert sesion_recibida is sesion_google
+        assert folder == "[Gmail]/Sent Mail"
+        return Buscador_adapter(mailbox_nuevo, sesion_google.user, sesion_google=sesion_google)
+
+    monkeypatch.setattr(
+        Buscador_adapter,
+        "login_con_oauth2",
+        classmethod(lambda cls, sesion_recibida, retries=3, delay_s=1, folder="INBOX": fake_login_con_oauth2(sesion_recibida, retries=retries, delay_s=delay_s, folder=folder)),
+    )
+
+    buscador.relogin_en("[Gmail]/Sent Mail")
+
+    assert buscador.mailbox is mailbox_nuevo

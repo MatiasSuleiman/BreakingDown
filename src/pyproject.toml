@@ -12,6 +12,8 @@ dependencies = [
     "PyQt6>=6.6",
     "imap-tools>=1.5",
     "openpyxl>=3.1",
+    "google-auth>=2.0",
+    "google-auth-oauthlib>=1.2",
 ]
 
 [project.optional-dependencies]
@@ -29,6 +31,7 @@ py-modules = [
     "buscador_adapter",
     "condicion",
     "errores",
+    "google_oauth",
     "gui",
     "main",
     "mostrador_de_condiciones",
@@ -48,16 +51,18 @@ author = "BreakingDown"
 author_email = "dev@breakingdown.local"
 
 [tool.briefcase.app.breakingdown]
-formal_name = "Build n' Breakdown"
+formal_name = "BreakingDown"
 description = "Search Gmail mails and export breakdown Excel sheets."
 long_description = """Search Gmail, apply filters, and generate a breakdown spreadsheet for legal/operational reporting."""
 sources = [
+    "app_config",
     "breakingdown",
     "__init__.py",
     "Breakdown.py",
     "buscador_adapter.py",
     "condicion.py",
     "errores.py",
+    "google_oauth.py",
     "gui.py",
     "main.py",
     "mostrador_de_condiciones.py",
@@ -69,6 +74,8 @@ requires = [
     "PyQt6>=6.6",
     "imap-tools>=1.5",
     "openpyxl>=3.1",
+    "google-auth>=2.0",
+    "google-auth-oauthlib>=1.2",
 ]
 
 [tool.briefcase.app.breakingdown.macOS]

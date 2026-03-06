@@ -1,3 +1,7 @@
 .briefcase/
 build/
 dist/
+google_client_secret.json
+client_secret_*.json
+google_oauth_token.json
+app_config/*.json

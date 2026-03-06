@@ -70,11 +70,11 @@ class Gui:
         self.busqueda_en_curso = False
 
         self.ventana = QMainWindow()
-        self.ventana.setWindowTitle("Build n' Breakdown")
+        self.ventana.setWindowTitle("BreakingDown")
         self.ventana.setGeometry(100, 100, 1600, 900)
 
         texto_de_bienvenida = QLabel(
-            "Bienvenido a Breaking Down,\n elija los mails para comenzar", self.ventana
+            "Bienvenido a BreakingDown,\n elija los mails para comenzar", self.ventana
         )
         texto_de_bienvenida.setGeometry(720, 10, 280, 30)
 
