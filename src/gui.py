@@ -1,5 +1,6 @@
 from PyQt6.QtCore import QObject, QThread, Qt, pyqtSignal
 from PyQt6.QtWidgets import (
+    QButtonGroup,
     QDialog,
     QFileDialog,
     QLabel,
@@ -81,10 +82,10 @@ class Gui:
             self.ventana, 700, 120, 20, 10, self.sistema
         )
         self.mostrador_de_mails_del_break = Mostrador_de_mails_del_break.en(
-            self.ventana, 700, 650, 20, 140, self
+            self.ventana, 700, 610, 20, 180, self
         )
         self.mostrador_de_mails_encontrados = Mostrador_de_mails_buscados.en(
-            self.ventana, 700, 650, 880, 140, self
+            self.ventana, 700, 610, 880, 180, self
         )
 
         self.boton_de_busqueda = QPushButton("Buscar", self.ventana)
@@ -96,10 +97,31 @@ class Gui:
         self.barra_de_busqueda.returnPressed.connect(self.buscar)
         self.barra_de_busqueda.setGeometry(970, 50, 500, 30)
 
+        self.grupo_de_modo_de_busqueda = QButtonGroup(self.ventana)
+        self.grupo_de_modo_de_busqueda.setExclusive(True)
+
+        self.boton_de_recibidos = QPushButton("Recibidos", self.ventana)
+        self.boton_de_recibidos.setCheckable(True)
+        self.boton_de_recibidos.setChecked(True)
+        self.boton_de_recibidos.setGeometry(970, 90, 120, 30)
+        self.grupo_de_modo_de_busqueda.addButton(self.boton_de_recibidos)
+        self.boton_de_recibidos.clicked.connect(self.seleccionar_recibidos)
+
+        self.boton_de_enviados = QPushButton("Enviados", self.ventana)
+        self.boton_de_enviados.setCheckable(True)
+        self.boton_de_enviados.setGeometry(1110, 90, 120, 30)
+        self.grupo_de_modo_de_busqueda.addButton(self.boton_de_enviados)
+        self.boton_de_enviados.clicked.connect(self.seleccionar_enviados)
+
+        self.indicador_de_busqueda = QLabel("", self.ventana)
+        self.indicador_de_busqueda.setGeometry(970, 125, 260, 20)
+        self.indicador_de_busqueda.hide()
+
         self.boton_de_crear_break = QPushButton("Crear Breakdown", self.ventana)
         self.boton_de_crear_break.clicked.connect(self.crear_breakdown)
         self.boton_de_crear_break.setGeometry(520, 830, 200, 30)
 
+        self.seleccionar_recibidos()
         self.ventana.show()
 
     def buscar(self):
@@ -110,10 +132,11 @@ class Gui:
         self.limpiar_buscados()
         asunto = self.barra_de_busqueda.text().strip()
         self.mostrador_de_condiciones.aplicar_condiciones_a(self.sistema)
-        self.sistema.agregar_condicion_de_asunto(asunto)
         self.sistema.limpiar_encontrados()
 
         self.busqueda_en_curso = True
+        self.indicador_de_busqueda.setText("Buscando...")
+        self.indicador_de_busqueda.show()
 
         self.batcher_de_busqueda = Batcher_de_busqueda(self.sistema, asunto, tamanio_de_lote=5)
         self.hilo_de_busqueda = Hilo_de_busqueda(self.batcher_de_busqueda)
@@ -139,6 +162,7 @@ class Gui:
 
     def al_finalizar_busqueda(self):
         self.busqueda_en_curso = False
+        self.indicador_de_busqueda.hide()
 
     def cancelar_busqueda(self):
         if not self.busqueda_en_curso:
@@ -150,6 +174,45 @@ class Gui:
             del self.hilo_de_busqueda
         if hasattr(self, "batcher_de_busqueda"):
             del self.batcher_de_busqueda
+
+    def seleccionar_recibidos(self):
+        self.cambiar_carpeta_de_busqueda("INBOX")
+
+    def seleccionar_enviados(self):
+        self.cambiar_carpeta_de_busqueda("[Gmail]/Sent Mail")
+
+    def cambiar_carpeta_de_busqueda(self, carpeta):
+        carpeta_previa = self.sistema.buscador.carpeta_actual
+
+        if self.busqueda_en_curso:
+            self.restaurar_selector_de_carpeta(carpeta_previa)
+            QMessageBox.warning(
+                self.ventana,
+                "Busqueda en curso",
+                "No se puede cambiar la carpeta mientras se esta buscando.",
+            )
+            return
+
+        try:
+            self.sistema.buscador.cambiar_carpeta(carpeta)
+        except Exception as error:
+            self.restaurar_selector_de_carpeta(carpeta_previa)
+            QMessageBox.critical(
+                self.ventana,
+                "Error de carpeta",
+                f"No se pudo seleccionar la carpeta.\n{error}",
+            )
+
+    def restaurar_selector_de_carpeta(self, carpeta):
+        botones = (self.boton_de_recibidos, self.boton_de_enviados)
+        for boton in botones:
+            boton.blockSignals(True)
+
+        self.boton_de_recibidos.setChecked(carpeta == "INBOX")
+        self.boton_de_enviados.setChecked(carpeta != "INBOX")
+
+        for boton in botones:
+            boton.blockSignals(False)
 
     def ver_mail(self, mail):
         ventana_del_mail = QDialog(self.ventana)
@@ -167,11 +230,11 @@ class Gui:
         ventana_del_mail.raise_()
         ventana_del_mail.activateWindow()
 
-    def cambiar_resumen_de(self, mail, resumen):
-        self.sistema.cambiar_resumen_de(mail, resumen)
+    def cambiar_descripcion_de(self, mail, descripcion):
+        self.sistema.cambiar_descripcion_de(mail, descripcion)
 
-    def ver_resumen_de(self, mail):
-        return self.sistema.ver_resumen_de(mail)
+    def ver_descripcion_de(self, mail):
+        return self.sistema.ver_descripcion_de(mail)
 
     def agregar_mail(self, mail):
         self.sistema.agregar_mail_encontrado(mail)

@@ -38,12 +38,18 @@ def es_error_de_autenticacion(error):
             pass
     return "AUTHENTICATIONFAILED" in str(error).upper()
 
-
 class Buscador_adapter:
+    ALIAS_DE_CARPETAS = {
+        "INBOX": ("INBOX",),
+        "[Gmail]/Sent Mail": ("[Gmail]/Sent Mail", "[Gmail]/Enviados"),
+        "[Gmail]/Enviados": ("[Gmail]/Enviados", "[Gmail]/Sent Mail"),
+    }
+
     def __init__(self, mailbox, user, password):
         self.mailbox = mailbox
         self.user = user
         self.password = password
+        self.carpeta_actual = "INBOX"
 
     @classmethod
     def login(cls, user, password, retries=3, delay_s=1, folder="INBOX"):
@@ -65,16 +71,37 @@ class Buscador_adapter:
         nuevo_buscador = self.__class__.login(self.user, self.password, folder=folder)
         self.mailbox = nuevo_buscador.mailbox
 
-    def seleccionar_carpeta_de_busqueda(self):
-        try:
-            self.mailbox.folder.set("[Gmail]/All Mail", readonly=True)
-        except UnexpectedCommandStatusError:
-            self.relogin_en("[Gmail]/Todos")
+    def cambiar_carpeta(self, carpeta):
+        self.carpeta_actual = carpeta
+        self.seleccionar_carpeta_actual()
+
+    def carpetas_posibles(self):
+        return self.ALIAS_DE_CARPETAS.get(self.carpeta_actual, (self.carpeta_actual,))
+
+    def seleccionar_carpeta_actual(self):
+        ultimo_error = None
+
+        for carpeta in self.carpetas_posibles():
+            try:
+                self.mailbox.folder.set(carpeta, readonly=True)
+                self.carpeta_actual = carpeta
+                return
+            except UnexpectedCommandStatusError as error:
+                ultimo_error = error
+
+        for carpeta in self.carpetas_posibles():
+            try:
+                self.relogin_en(carpeta)
+                self.carpeta_actual = carpeta
+                return
+            except UnexpectedCommandStatusError as error:
+                ultimo_error = error
+
+        raise ultimo_error
 
     def encontrar_de_a_partes(self, asunto, condiciones):
-        self.seleccionar_carpeta_de_busqueda()
         asunto = asunto.strip()
         criterio = AND(subject=asunto)
-        for mail in self.mailbox.fetch(criterio, bulk=50, reverse=True):
+        for mail in self.mailbox.fetch(criterio, bulk=10, reverse=True):
             if cumple_todo(mail, condiciones):
                 yield mail

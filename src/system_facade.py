@@ -2,7 +2,6 @@ try:
     from src.buscador_adapter import Buscador_adapter
     from src.Breakdown import Breakdown
     from src.condicion import (
-        Condicion_de_asunto,
         Condicion_de_cuerpo,
         Condicion_de_emisor,
         Condicion_de_receptor,
@@ -13,7 +12,6 @@ except ModuleNotFoundError:
     from buscador_adapter import Buscador_adapter
     from Breakdown import Breakdown
     from condicion import (
-        Condicion_de_asunto,
         Condicion_de_cuerpo,
         Condicion_de_emisor,
         Condicion_de_receptor,
@@ -31,7 +29,7 @@ class System_Facade:
         self.abogado_a_cargo = user
         self.mails_encontrados = []
         self.mails_del_breakdown = []
-        self.resumen_por_mail = {}
+        self.descripcion_por_mail = {}
         self.buscador = Buscador_adapter.login(user, password)
         self.condiciones = []
 
@@ -41,7 +39,7 @@ class System_Facade:
     def agregar_mail_encontrado(self, mail):
         self.mails_del_breakdown.append(mail)
         self.mails_encontrados.remove(mail)
-        self.resumen_por_mail[mail] = ""
+        self.descripcion_por_mail[mail] = ""
 
     def agregar_mails_encontrados(self, mails):
         self.mails_encontrados.extend(mails)
@@ -67,17 +65,11 @@ class System_Facade:
     def quitar_mail_del_breakdown(self, mail):
         self.mails_del_breakdown.remove(mail)
         self.mails_encontrados.append(mail)
-        self.resumen_por_mail.pop(mail, None)
+        self.descripcion_por_mail.pop(mail, None)
 
 
     def ver_mail_en_breakdown(self, numero):
         return self.mails_del_breakdown[numero]
-
-
-    def agregar_condicion_de_asunto(self, asunto):
-        condicion = Condicion_de_asunto.con_asunto(asunto)
-        self.condiciones += [condicion]
-
 
     def agregar_condicion_de_cuerpo(self, cuerpo):
         condicion = Condicion_de_cuerpo.con_cuerpo(cuerpo)
@@ -91,12 +83,6 @@ class System_Facade:
     def agregar_condicion_de_receptor(self, receptor):
         condicion = Condicion_de_receptor.con_receptor(receptor)
         self.condiciones += [condicion]
-
-    def agregar_condicion_de_enviado_por_mi(self):
-        self.agregar_condicion_de_emisor(self.abogado_a_cargo)
-
-    def agregar_condicion_de_recibido_por_mi(self):
-        self.agregar_condicion_de_receptor(self.abogado_a_cargo)
 
     def agregar_condicion_de_enviado_antes_de(self, fecha):
         condicion = Condicion_de_enviado_antes_de.enviado_antes_de(fecha)
@@ -114,12 +100,11 @@ class System_Facade:
     def limpiar_condiciones(self):
         self.condiciones = []
 
-    def cambiar_resumen_de(self, mail, resumen):
-        self.resumen_por_mail[mail] = resumen
+    def cambiar_descripcion_de(self, mail, descripcion):
+        self.descripcion_por_mail[mail] = descripcion
 
-    def ver_resumen_de(self, mail):
-        return self.resumen_por_mail.get(mail, "")
-
+    def ver_descripcion_de(self, mail):
+        return self.descripcion_por_mail.get(mail, "")
 
     def crear_breakdown(self, path):
         return Breakdown.con_mails_manejado_por(

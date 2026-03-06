@@ -28,7 +28,7 @@ class Condicion_de_cuerpo(Condicion):
                 if _esta_vacio(cuerpo):
                         return No_condicion()
                 return cls(cuerpo)
-        
+
         def __init__(self,cuerpo):
                 self.body = cuerpo
         def cumple(self, mail):
@@ -43,10 +43,10 @@ class Condicion_de_asunto(Condicion):
                 return cls(asunto)
 
         def __init__(self, asunto):
-                self.asunto = asunto
+                self.asunto = asunto.lower()
 
         def cumple(self, mail):
-                return self.asunto in (mail.subject or "")
+                return self.asunto in (mail.subject or "").lower()
 
 
 class Condicion_de_emisor(Condicion):

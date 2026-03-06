@@ -49,16 +49,10 @@ class Mostrador_de_condiciones:
         layout.addWidget(QLabel("Enviado por:"), 0, 0)
         self.barra_de_emisor = QLineEdit()
         layout.addWidget(self.barra_de_emisor, 0, 1)
-        self.boton_de_enviado_por_mi = QPushButton("Enviados por mi")
-        self.boton_de_enviado_por_mi.setCheckable(True)
-        layout.addWidget(self.boton_de_enviado_por_mi, 0, 2)
 
-        layout.addWidget(QLabel("Enviado a:"), 0, 3)
+        layout.addWidget(QLabel("Enviado a:"), 0, 2)
         self.barra_de_receptor = QLineEdit()
-        layout.addWidget(self.barra_de_receptor, 0, 4)
-        self.boton_de_recibido_por_mi = QPushButton("Recibidos por mi")
-        self.boton_de_recibido_por_mi.setCheckable(True)
-        layout.addWidget(self.boton_de_recibido_por_mi, 0, 5)
+        layout.addWidget(self.barra_de_receptor, 0, 3)
 
         layout.addWidget(QLabel("Enviado antes de:"), 1, 0)
         self.barra_de_enviado_antes_de = Barra_de_fecha()
@@ -66,15 +60,15 @@ class Mostrador_de_condiciones:
         self.barra_de_enviado_antes_de.setPlaceholderText("DD/MM/AAAA")
         layout.addWidget(self.barra_de_enviado_antes_de, 1, 1)
 
-        layout.addWidget(QLabel("Enviado despues de:"), 1, 3)
+        layout.addWidget(QLabel("Enviado despues de:"), 1, 2)
         self.barra_de_enviado_despues_de = Barra_de_fecha()
         self.barra_de_enviado_despues_de.setInputMask("00/00/0000")
         self.barra_de_enviado_despues_de.setPlaceholderText("DD/MM/AAAA")
-        layout.addWidget(self.barra_de_enviado_despues_de, 1, 4)
+        layout.addWidget(self.barra_de_enviado_despues_de, 1, 3)
 
         layout.addWidget(QLabel("Conteniendo:"), 2, 0)
         self.barra_de_cuerpo = QLineEdit()
-        layout.addWidget(self.barra_de_cuerpo, 2, 1, 1, 5)
+        layout.addWidget(self.barra_de_cuerpo, 2, 1, 1, 3)
 
 
 
@@ -91,16 +85,6 @@ class Mostrador_de_condiciones:
         except ValueError:
             return None
 
-    def chequear_condicion_de_enviado_por_mi(self, sistema):
-        if self.boton_de_enviado_por_mi.isChecked():
-            sistema.agregar_condicion_de_enviado_por_mi()
-
-    def chequear_condicion_de_recibido_por_mi(self, sistema):
-        if self.boton_de_recibido_por_mi.isChecked():
-            sistema.agregar_condicion_de_recibido_por_mi()
-
-
-
     def aplicar_condiciones_a(self, sistema):
         emisor = self.barra_de_emisor.text().strip()
         receptor = self.barra_de_receptor.text().strip()
@@ -111,8 +95,6 @@ class Mostrador_de_condiciones:
         sistema.limpiar_condiciones()
         sistema.agregar_condicion_de_emisor(emisor)
         sistema.agregar_condicion_de_receptor(receptor)
-        self.chequear_condicion_de_enviado_por_mi(sistema)
-        self.chequear_condicion_de_recibido_por_mi(sistema)
-        sistema.agregar_condicion_de_cuerpo(cuerpo)
         sistema.agregar_condicion_de_enviado_antes_de(fecha_antes)
         sistema.agregar_condicion_de_enviado_despues_de(fecha_despues)
+        sistema.agregar_condicion_de_cuerpo(cuerpo)
