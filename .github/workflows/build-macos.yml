@@ -12,6 +12,9 @@ jobs:
         shell: bash
         working-directory: src
 
+    env:
+      VENV: ${{ github.workspace }}/.venv
+
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -21,10 +24,26 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install Briefcase and project dependencies
+      - name: Create virtual environment
+        working-directory: .
+        run: |
+          python -m venv "$VENV"
+          echo "$VENV/bin" >> "$GITHUB_PATH"
+
+      - name: Write bundled Google client secret
+        env:
+          GOOGLE_CLIENT_SECRET_JSON_B64: ${{ secrets.GOOGLE_CLIENT_SECRET_JSON_B64 }}
+        run: |
+          python -c "import base64, os, pathlib, sys; secret = os.environ.get('GOOGLE_CLIENT_SECRET_JSON_B64', '').strip(); pathlib.Path('app_config').mkdir(exist_ok=True); pathlib.Path('app_config/google_client_secret.json').write_bytes(base64.b64decode(secret)) if secret else sys.exit('Missing GitHub secret GOOGLE_CLIENT_SECRET_JSON_B64')"
+
+      - name: Install Briefcase toolchain
         run: |
           python -m pip install --upgrade pip
+          python -m pip install "chardet==5.2.0"
           python -m pip install briefcase==0.3.25
+
+      - name: Install project dependencies
+        run: |
           python -m pip install -e .[dev]
 
       - name: Create macOS app
