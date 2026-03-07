@@ -1,0 +1,47 @@
+name: Build macOS App
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-macos:
+    runs-on: macos-latest
+
+    defaults:
+      run:
+        shell: bash
+        working-directory: src
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Briefcase and project dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install briefcase==0.3.25
+          python -m pip install -e .[dev]
+
+      - name: Create macOS app
+        run: python -m briefcase create macOS
+
+      - name: Build macOS app
+        run: python -m briefcase build macOS
+
+      - name: Package macOS app
+        run: python -m briefcase package macOS
+
+      - name: Upload macOS package artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: breakingdown-macos
+          path: |
+            src/dist/*.dmg
+            src/dist/*.pkg
+            src/dist/*.zip
+          if-no-files-found: error

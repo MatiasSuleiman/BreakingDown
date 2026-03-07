@@ -19,7 +19,9 @@ SCOPES = [
     CANONICAL_EMAIL_SCOPE,
     "https://mail.google.com/",
 ]
+APP_NAME = "breakingdown"
 CLIENT_SECRETS_ENV = "BREAKINGDOWN_GOOGLE_CLIENT_SECRETS_FILE"
+CONFIG_DIR_ENV = "BREAKINGDOWN_CONFIG_DIR"
 TOKEN_FILE_ENV = "BREAKINGDOWN_GOOGLE_TOKEN_FILE"
 USERINFO_URL = "https://www.googleapis.com/oauth2/v3/userinfo"
 
@@ -68,16 +70,37 @@ def rutas_candidatas_de_client_secret():
 
 def ruta_de_client_secret():
     candidatos = rutas_candidatas_de_client_secret()
-    if len(candidatos) == 1:
+    if candidatos:
         return candidatos[0]
     return Path(__file__).resolve().parent / "app_config" / "google_client_secret.json"
+
+
+def ruta_de_configuracion():
+    ruta = os.environ.get(CONFIG_DIR_ENV)
+    if ruta:
+        return Path(ruta).expanduser()
+
+    if sys.platform == "win32":
+        appdata = os.environ.get("APPDATA")
+        if appdata:
+            return Path(appdata).expanduser() / APP_NAME
+        return Path.home() / "AppData" / "Roaming" / APP_NAME
+
+    if sys.platform == "darwin":
+        return Path.home() / "Library" / "Application Support" / APP_NAME
+
+    xdg_config_home = os.environ.get("XDG_CONFIG_HOME")
+    if xdg_config_home:
+        return Path(xdg_config_home).expanduser() / APP_NAME
+
+    return Path.home() / ".config" / APP_NAME
 
 
 def ruta_de_token():
     ruta = os.environ.get(TOKEN_FILE_ENV)
     if ruta:
         return Path(ruta).expanduser()
-    return Path.home() / ".config" / "breakingdown" / "google_oauth_token.json"
+    return ruta_de_configuracion() / "google_oauth_token.json"
 
 
 def imports_de_google():
@@ -120,8 +143,14 @@ class SesionGoogleOAuth:
 
 
 def guardar_credentials(credentials, token_path):
-    token_path.parent.mkdir(parents=True, exist_ok=True)
-    token_path.write_text(credentials.to_json(), encoding="utf-8")
+    try:
+        token_path.parent.mkdir(parents=True, exist_ok=True)
+        token_path.write_text(credentials.to_json(), encoding="utf-8")
+    except OSError as error:
+        raise GoogleOAuthError(
+            "No se pudo guardar la sesion de Google en "
+            f"{token_path}."
+        ) from error
 
 
 def cargar_credentials_guardadas(token_path):
@@ -168,9 +197,13 @@ def flujo_local_desde_client_secret(client_secret_path):
     GoogleRequest, _, InstalledAppFlow = imports_de_google()
 
     if not client_secret_path.exists():
+        rutas_sugeridas = [str(ruta) for ruta in rutas_candidatas_de_client_secret()]
+        detalle = ""
+        if rutas_sugeridas:
+            detalle = " Se detectaron estas rutas posibles: " + ", ".join(rutas_sugeridas) + "."
         raise ConfiguracionGoogleOAuthError(
             "Falta el archivo de credenciales OAuth de Google. "
-            f"Configure {CLIENT_SECRETS_ENV} o cree {client_secret_path}."
+            f"Configure {CLIENT_SECRETS_ENV} o cree {client_secret_path}.{detalle}"
         )
 
     flow = InstalledAppFlow.from_client_secrets_file(str(client_secret_path), SCOPES)

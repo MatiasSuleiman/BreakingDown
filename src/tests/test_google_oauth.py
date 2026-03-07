@@ -9,6 +9,7 @@ from google_oauth import (
     CANONICAL_EMAIL_SCOPE,
     LEGACY_EMAIL_SCOPE,
     SCOPES,
+    APP_NAME,
     SesionGoogleOAuth,
     borrar_credentials_guardadas,
     cargar_credentials_guardadas,
@@ -17,6 +18,8 @@ from google_oauth import (
     guardar_credentials,
     obtener_user_de,
     ruta_de_client_secret,
+    ruta_de_configuracion,
+    ruta_de_token,
 )
 
 
@@ -111,9 +114,31 @@ def test_ruta_de_client_secret_prefiere_google_client_secret_en_app_config(monke
         assert ruta_de_client_secret() == archivo
 
 
+def test_ruta_de_client_secret_devuelve_el_primer_candidato_si_hay_multiples(monkeypatch):
+    candidatos = [Path("/tmp/uno.json"), Path("/tmp/dos.json")]
+    monkeypatch.setattr("google_oauth.rutas_candidatas_de_client_secret", lambda: candidatos)
+
+    assert ruta_de_client_secret() == candidatos[0]
+
+
 def test_scopes_usan_el_scope_canonico_de_google():
     assert CANONICAL_EMAIL_SCOPE in SCOPES
     assert LEGACY_EMAIL_SCOPE not in SCOPES
+
+
+def test_ruta_de_configuracion_usa_xdg_en_linux(monkeypatch):
+    monkeypatch.setattr("google_oauth.sys.platform", "linux")
+    monkeypatch.setenv("XDG_CONFIG_HOME", "/tmp/xdg-config")
+    monkeypatch.delenv("BREAKINGDOWN_CONFIG_DIR", raising=False)
+
+    assert ruta_de_configuracion() == Path("/tmp/xdg-config") / APP_NAME
+
+
+def test_ruta_de_token_usa_el_directorio_de_configuracion(monkeypatch):
+    monkeypatch.setattr("google_oauth.ruta_de_configuracion", lambda: Path("/tmp/config-dir"))
+    monkeypatch.delenv("BREAKINGDOWN_GOOGLE_TOKEN_FILE", raising=False)
+
+    assert ruta_de_token() == Path("/tmp/config-dir") / "google_oauth_token.json"
 
 
 def test_cargar_credentials_guardadas_reintenta_con_scope_legacy(monkeypatch):
@@ -156,6 +181,21 @@ def test_borrar_credentials_guardadas_elimina_el_archivo():
         borrar_credentials_guardadas(path)
 
         assert path.exists() is False
+
+
+def test_guardar_credentials_informa_la_ruta_si_falla_la_escritura(monkeypatch):
+    credentials = FakeCredentials()
+
+    with TemporaryDirectory() as directory:
+        path = Path(directory) / "token.json"
+        monkeypatch.setattr(Path, "write_text", lambda *_args, **_kwargs: (_ for _ in ()).throw(OSError("denied")))
+
+        try:
+            guardar_credentials(credentials, path)
+        except Exception as error:
+            assert str(path) in str(error)
+        else:
+            assert False, "guardar_credentials deberia haber fallado"
 
 
 def test_cargar_sesion_guardada_devuelve_none_si_no_hay_token(monkeypatch):
