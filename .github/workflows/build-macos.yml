@@ -53,7 +53,7 @@ jobs:
         run: python -m briefcase build macOS
 
       - name: Package macOS app
-        run: python -m briefcase package macOS
+        run: python -m briefcase package macOS -p dmg --adhoc-sign
 
       - name: Upload macOS package artifacts
         uses: actions/upload-artifact@v4
@@ -61,6 +61,4 @@ jobs:
           name: breakingdown-macos
           path: |
             src/dist/*.dmg
-            src/dist/*.pkg
-            src/dist/*.zip
           if-no-files-found: error
