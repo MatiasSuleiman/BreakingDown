@@ -8,3 +8,15 @@ class GoogleOAuthError(Exception):
 
 class ConfiguracionGoogleOAuthError(GoogleOAuthError):
     pass
+
+
+class GoogleOAuthCredencialesRechazadasError(GoogleOAuthError):
+    pass
+
+
+class GoogleOAuthRedError(GoogleOAuthError):
+    pass
+
+
+class GoogleOAuthRespuestaInvalidaError(GoogleOAuthError):
+    pass

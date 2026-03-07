@@ -3,13 +3,32 @@ import os
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from urllib.error import URLError
+from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
+from requests import Session
+from requests.exceptions import RequestException
 
 try:
-    from src.errores import ConfiguracionGoogleOAuthError, GoogleOAuthError
+    from google.auth.exceptions import RefreshError
 except ModuleNotFoundError:
-    from errores import ConfiguracionGoogleOAuthError, GoogleOAuthError
+    RefreshError = Exception
+
+try:
+    from src.errores import (
+        ConfiguracionGoogleOAuthError,
+        GoogleOAuthCredencialesRechazadasError,
+        GoogleOAuthError,
+        GoogleOAuthRedError,
+        GoogleOAuthRespuestaInvalidaError,
+    )
+except ModuleNotFoundError:
+    from errores import (
+        ConfiguracionGoogleOAuthError,
+        GoogleOAuthCredencialesRechazadasError,
+        GoogleOAuthError,
+        GoogleOAuthRedError,
+        GoogleOAuthRespuestaInvalidaError,
+    )
 
 
 CANONICAL_EMAIL_SCOPE = "https://www.googleapis.com/auth/userinfo.email"
@@ -24,6 +43,14 @@ CLIENT_SECRETS_ENV = "BREAKINGDOWN_GOOGLE_CLIENT_SECRETS_FILE"
 CONFIG_DIR_ENV = "BREAKINGDOWN_CONFIG_DIR"
 TOKEN_FILE_ENV = "BREAKINGDOWN_GOOGLE_TOKEN_FILE"
 USERINFO_URL = "https://www.googleapis.com/oauth2/v3/userinfo"
+GMAIL_PROFILE_URL = "https://gmail.googleapis.com/gmail/v1/users/me/profile"
+NETWORK_TIMEOUT_S = 15
+
+
+class SessionConTimeout(Session):
+    def request(self, *args, **kwargs):
+        kwargs.setdefault("timeout", NETWORK_TIMEOUT_S)
+        return super().request(*args, **kwargs)
 
 
 def directorios_base_para_client_secret():
@@ -116,6 +143,12 @@ def imports_de_google():
     return GoogleRequest, Credentials, InstalledAppFlow
 
 
+def construir_google_request():
+    GoogleRequest, _, _ = imports_de_google()
+    session = SessionConTimeout()
+    return GoogleRequest(session=session), session
+
+
 @dataclass
 class SesionGoogleOAuth:
     user: str
@@ -132,8 +165,19 @@ class SesionGoogleOAuth:
                 "La sesion de Google expiro y no tiene refresh token para renovarse."
             )
 
-        GoogleRequest, _, _ = imports_de_google()
-        self.credentials.refresh(GoogleRequest())
+        google_request, session = construir_google_request()
+        try:
+            self.credentials.refresh(google_request)
+        except RequestException as error:
+            raise GoogleOAuthRedError(
+                "No se pudo conectar con Google para refrescar la sesion OAuth."
+            ) from error
+        except RefreshError as error:
+            raise GoogleOAuthCredencialesRechazadasError(
+                "Google rechazo las credenciales OAuth al intentar refrescar la sesion."
+            ) from error
+        finally:
+            session.close()
         guardar_credentials(self.credentials, self.token_path)
 
     def refrescar_si_es_necesario(self):
@@ -151,6 +195,76 @@ def guardar_credentials(credentials, token_path):
             "No se pudo guardar la sesion de Google en "
             f"{token_path}."
         ) from error
+
+
+def refrescar_credentials(credentials):
+    if not getattr(credentials, "refresh_token", None):
+        raise GoogleOAuthCredencialesRechazadasError(
+            "Google rechazo las credenciales OAuth y la sesion no tiene refresh token para renovarse."
+        )
+
+    google_request, session = construir_google_request()
+    try:
+        credentials.refresh(google_request)
+    except RequestException as error:
+        raise GoogleOAuthRedError(
+            "No se pudo conectar con Google para refrescar las credenciales OAuth."
+        ) from error
+    except RefreshError as error:
+        raise GoogleOAuthCredencialesRechazadasError(
+            "Google rechazo las credenciales OAuth al intentar refrescarlas."
+        ) from error
+    finally:
+        session.close()
+
+
+def leer_json_de_google(credentials, url, descripcion):
+    request = Request(
+        url,
+        headers={"Authorization": f"Bearer {credentials.token}"},
+    )
+    try:
+        with urlopen(request, timeout=NETWORK_TIMEOUT_S) as response:
+            return json.load(response)
+    except HTTPError as error:
+        if error.code in (401, 403):
+            raise GoogleOAuthCredencialesRechazadasError(
+                f"Google rechazo las credenciales OAuth al consultar {descripcion} (HTTP {error.code})."
+            ) from error
+        raise GoogleOAuthError(
+            f"Google devolvio un error inesperado al consultar {descripcion} (HTTP {error.code})."
+        ) from error
+    except URLError as error:
+        raise GoogleOAuthRedError(
+            f"No se pudo conectar con Google al consultar {descripcion}. Revise la conexion e intente nuevamente."
+        ) from error
+    except json.JSONDecodeError as error:
+        raise GoogleOAuthRespuestaInvalidaError(
+            f"Google devolvio una respuesta invalida al consultar {descripcion}."
+        ) from error
+
+
+def obtener_email_desde_payload(payload, campo, descripcion):
+    user = payload.get(campo, "").strip()
+    if not user:
+        raise GoogleOAuthRespuestaInvalidaError(
+            f"Google respondio sin un correo util al consultar {descripcion}."
+        )
+    return user
+
+
+def consultar_correo_de_google(credentials, url, campo, descripcion):
+    intento_de_refresh = False
+
+    while True:
+        try:
+            payload = leer_json_de_google(credentials, url, descripcion)
+            return obtener_email_desde_payload(payload, campo, descripcion)
+        except GoogleOAuthCredencialesRechazadasError:
+            if intento_de_refresh:
+                raise
+            refrescar_credentials(credentials)
+            intento_de_refresh = True
 
 
 def cargar_credentials_guardadas(token_path):
@@ -175,25 +289,49 @@ def borrar_credentials_guardadas(token_path=None):
 
 
 def obtener_user_de(credentials):
-    request = Request(
-        USERINFO_URL,
-        headers={"Authorization": f"Bearer {credentials.token}"},
-    )
     try:
-        with urlopen(request) as response:
-            payload = json.load(response)
-    except URLError as error:
-        raise GoogleOAuthError(
-            "No se pudo obtener el correo del usuario autenticado en Google."
-        ) from error
+        return consultar_correo_de_google(
+            credentials,
+            USERINFO_URL,
+            "email",
+            "el perfil basico de Google",
+        )
+    except GoogleOAuthCredencialesRechazadasError as error_de_userinfo:
+        try:
+            return consultar_correo_de_google(
+                credentials,
+                GMAIL_PROFILE_URL,
+                "emailAddress",
+                "el perfil de Gmail",
+            )
+        except GoogleOAuthCredencialesRechazadasError as error_de_gmail:
+            raise GoogleOAuthCredencialesRechazadasError(
+                "Google rechazo las credenciales OAuth al consultar tanto el perfil basico como el perfil de Gmail. "
+                "Reintente OAuth o use otra cuenta."
+            ) from error_de_gmail
+        except GoogleOAuthRespuestaInvalidaError:
+            raise GoogleOAuthRespuestaInvalidaError(
+                "Google respondio sin un correo usable en el perfil de Gmail despues de rechazar el perfil basico."
+            ) from error_de_userinfo
+    except GoogleOAuthRespuestaInvalidaError:
+        return consultar_correo_de_google(
+            credentials,
+            GMAIL_PROFILE_URL,
+            "emailAddress",
+            "el perfil de Gmail",
+        )
 
-    user = payload.get("email", "").strip()
-    if not user:
-        raise GoogleOAuthError("Google no devolvio un correo para la cuenta autenticada.")
-    return user
+
+def construir_sesion(credentials, token_path, guardar_en_disco=False):
+    sesion = SesionGoogleOAuth("", credentials, token_path)
+    sesion.refrescar_si_es_necesario()
+    sesion.user = obtener_user_de(credentials)
+    if guardar_en_disco:
+        guardar_credentials(credentials, token_path)
+    return sesion
 
 
-def flujo_local_desde_client_secret(client_secret_path):
+def flujo_local_desde_client_secret(client_secret_path, prompt=None):
     GoogleRequest, _, InstalledAppFlow = imports_de_google()
 
     if not client_secret_path.exists():
@@ -213,6 +351,7 @@ def flujo_local_desde_client_secret(client_secret_path):
         authorization_prompt_message="Abriendo Google en el navegador para iniciar sesion...",
         success_message="La autenticacion termino. Ya puede volver a BreakingDown.",
         open_browser=True,
+        prompt=prompt,
     )
     if not getattr(credentials, "valid", False) and getattr(credentials, "refresh_token", None):
         credentials.refresh(GoogleRequest())
@@ -226,13 +365,10 @@ def cargar_sesion_guardada():
     if credentials is None:
         return None
 
-    sesion = SesionGoogleOAuth("", credentials, token_path)
-    sesion.refrescar_si_es_necesario()
-    sesion.user = obtener_user_de(credentials)
-    return sesion
+    return construir_sesion(credentials, token_path, guardar_en_disco=True)
 
 
-def iniciar_sesion(forzar_nueva=False):
+def iniciar_sesion(forzar_nueva=False, seleccionar_cuenta=False):
     token_path = ruta_de_token()
 
     if forzar_nueva:
@@ -242,10 +378,9 @@ def iniciar_sesion(forzar_nueva=False):
     if sesion is not None:
         return sesion
 
-    credentials = flujo_local_desde_client_secret(ruta_de_client_secret())
-    guardar_credentials(credentials, token_path)
-
-    sesion = SesionGoogleOAuth("", credentials, token_path)
-    sesion.refrescar_si_es_necesario()
-    sesion.user = obtener_user_de(credentials)
-    return sesion
+    prompt = "select_account" if seleccionar_cuenta else None
+    credentials = flujo_local_desde_client_secret(
+        ruta_de_client_secret(),
+        prompt=prompt,
+    )
+    return construir_sesion(credentials, token_path, guardar_en_disco=True)

@@ -7,7 +7,7 @@ from imap_tools.errors import UnexpectedCommandStatusError
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from buscador_adapter import Buscador_adapter
+from buscador_adapter import Buscador_adapter, IMAP_TIMEOUT_S
 from condicion import Condicion_de_cuerpo
 
 
@@ -194,8 +194,8 @@ def test_login_con_oauth2_usa_xoauth2(monkeypatch):
     sesion_google = FakeSesionGoogle()
 
     class FakeMailBoxFactory:
-        def __init__(self, _host):
-            pass
+        def __init__(self, _host, timeout=None):
+            assert timeout == IMAP_TIMEOUT_S
 
         def xoauth2(self, user, access_token, folder):
             assert user == "lawyer@example.com"

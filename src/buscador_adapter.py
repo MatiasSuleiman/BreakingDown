@@ -38,6 +38,10 @@ def es_error_de_autenticacion(error):
             pass
     return "AUTHENTICATIONFAILED" in str(error).upper()
 
+
+ERRORES_TRANSITORIOS_DE_RED = (socket.gaierror, socket.timeout, TimeoutError)
+IMAP_TIMEOUT_S = 15
+
 class Buscador_adapter:
     ALIAS_DE_CARPETAS = {
         "INBOX": ("INBOX",),
@@ -57,13 +61,13 @@ class Buscador_adapter:
         last_error = None
         for _ in range(retries):
             try:
-                mailbox = MailBox("imap.gmail.com").login(user, password, folder)
+                mailbox = MailBox("imap.gmail.com", timeout=IMAP_TIMEOUT_S).login(user, password, folder)
                 return cls(mailbox, user, password)
             except (UnexpectedCommandStatusError, imaplib.IMAP4.error) as error:
                 if es_error_de_autenticacion(error):
                     raise CredencialesInvalidasError() from error
                 raise
-            except socket.gaierror as error:
+            except ERRORES_TRANSITORIOS_DE_RED as error:
                 last_error = error
                 time.sleep(delay_s)
         raise last_error
@@ -73,7 +77,7 @@ class Buscador_adapter:
         last_error = None
         for _ in range(retries):
             try:
-                mailbox = MailBox("imap.gmail.com").xoauth2(
+                mailbox = MailBox("imap.gmail.com", timeout=IMAP_TIMEOUT_S).xoauth2(
                     sesion_google.user,
                     sesion_google.access_token(),
                     folder,
@@ -89,7 +93,7 @@ class Buscador_adapter:
                     last_error = error
                     continue
                 raise
-            except socket.gaierror as error:
+            except ERRORES_TRANSITORIOS_DE_RED as error:
                 last_error = error
                 time.sleep(delay_s)
         raise last_error

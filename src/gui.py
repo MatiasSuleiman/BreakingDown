@@ -65,8 +65,9 @@ class Hilo_de_busqueda(QThread):
 
 
 class Gui:
-    def __init__(self, sistema):
+    def __init__(self, sistema, al_volver_al_login=None):
         self.sistema = sistema
+        self.al_volver_al_login = al_volver_al_login
         self.busqueda_en_curso = False
 
         self.ventana = QMainWindow()
@@ -120,6 +121,10 @@ class Gui:
         self.boton_de_crear_break = QPushButton("Crear Breakdown", self.ventana)
         self.boton_de_crear_break.clicked.connect(self.crear_breakdown)
         self.boton_de_crear_break.setGeometry(520, 830, 200, 30)
+
+        self.boton_de_volver_al_login = QPushButton("Volver al login", self.ventana)
+        self.boton_de_volver_al_login.clicked.connect(self.volver_al_login)
+        self.boton_de_volver_al_login.setGeometry(20, 830, 150, 30)
 
         self.seleccionar_recibidos()
         self.ventana.show()
@@ -258,3 +263,15 @@ class Gui:
         if not path.lower().endswith(".xlsx"):
             path = f"{path}.xlsx"
         self.sistema.crear_breakdown(path=path)
+
+    def volver_al_login(self):
+        if self.busqueda_en_curso:
+            QMessageBox.warning(
+                self.ventana,
+                "Busqueda en curso",
+                "Cancele la busqueda actual antes de volver al login.",
+            )
+            return
+
+        if self.al_volver_al_login is not None:
+            self.al_volver_al_login()
