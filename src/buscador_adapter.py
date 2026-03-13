@@ -3,7 +3,7 @@ import time
 import imaplib
 from functools import reduce
 
-from imap_tools import MailBox, AND
+from imap_tools import MailBox, OR
 from imap_tools.errors import UnexpectedCommandStatusError
 
 try:
@@ -47,6 +47,7 @@ class Buscador_adapter:
         "INBOX": ("INBOX",),
         "[Gmail]/Sent Mail": ("[Gmail]/Sent Mail", "[Gmail]/Enviados"),
         "[Gmail]/Enviados": ("[Gmail]/Enviados", "[Gmail]/Sent Mail"),
+        "[Gmail]/All Mail": ("[Gmail]/All Mail", "[Gmail]/Todos"),
     }
 
     def __init__(self, mailbox, user, password=None, sesion_google=None):
@@ -138,7 +139,7 @@ class Buscador_adapter:
 
     def encontrar_de_a_partes(self, asunto, condiciones):
         asunto = asunto.strip()
-        criterio = AND(subject=asunto)
+        criterio = OR(subject=asunto, text=asunto)
         for mail in self.mailbox.fetch(criterio, bulk=10, reverse=True):
             if cumple_todo(mail, condiciones):
                 yield mail

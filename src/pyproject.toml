@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "breakingdown"
-version = "0.1.0"
+version = "0.1.1"
 description = "Desktop app for Gmail search and breakdown spreadsheet export."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -44,7 +44,7 @@ packages = ["breakingdown"]
 [tool.briefcase]
 project_name = "BreakingDown"
 bundle = "com.breakingdown"
-version = "0.1.0"
+version = "1.1.0"
 url = "https://example.com/breakingdown"
 license = { text = "Proprietary" }
 author = "BreakingDown"

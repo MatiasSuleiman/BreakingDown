@@ -3,6 +3,7 @@ README.md
 buscador_adapter.py
 condicion.py
 errores.py
+google_oauth.py
 gui.py
 main.py
 mostrador_de_condiciones.py
@@ -11,6 +12,7 @@ pyproject.toml
 system_facade.py
 ventana_de_login.py
 breakingdown/__init__.py
+breakingdown/__main__.py
 breakingdown/app.py
 breakingdown.egg-info/PKG-INFO
 breakingdown.egg-info/SOURCES.txt
@@ -18,3 +20,9 @@ breakingdown.egg-info/dependency_links.txt
 breakingdown.egg-info/entry_points.txt
 breakingdown.egg-info/requires.txt
 breakingdown.egg-info/top_level.txt
+tests/test_breakdown.py
+tests/test_buscador_adapter.py
+tests/test_google_oauth.py
+tests/test_main.py
+tests/test_system_facade.py
+tests/test_ventana_de_login.py

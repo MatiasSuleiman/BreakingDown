@@ -116,4 +116,7 @@ class System_Facade:
     def crear_breakdown(self, path):
         return Breakdown.con_mails_manejado_por(
             self.mails_del_breakdown, self.abogado_a_cargo, path=path, sistema=self
-        )
+        ) 
+
+    def cantidad_de_encontrados(self):
+        return len(self.mails_encontrados)

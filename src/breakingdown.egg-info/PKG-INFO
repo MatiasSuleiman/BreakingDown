@@ -7,8 +7,10 @@ Description-Content-Type: text/markdown
 Requires-Dist: PyQt6>=6.6
 Requires-Dist: imap-tools>=1.5
 Requires-Dist: openpyxl>=3.1
+Requires-Dist: google-auth>=2.0
+Requires-Dist: google-auth-oauthlib>=1.2
 Provides-Extra: dev
-Requires-Dist: briefcase>=0.3.19; extra == "dev"
+Requires-Dist: briefcase==0.3.25; extra == "dev"
 Requires-Dist: pytest>=8.0; extra == "dev"
 
 # BreakingDown
@@ -28,3 +30,34 @@ python3 -m briefcase create
 python3 -m briefcase build
 python3 -m briefcase package
 ```
+
+## Build macOS On GitHub
+
+If you do not have a Mac, use the GitHub Actions workflow at
+`.github/workflows/build-macos.yml`.
+
+It is pinned to:
+
+- Python `3.12`
+- Briefcase `0.3.25`
+
+Before running the workflow, create a GitHub Actions secret named
+`GOOGLE_CLIENT_SECRET_JSON_B64` with the base64-encoded contents of your Google
+OAuth client secret JSON.
+
+Run it from the GitHub Actions tab with `workflow_dispatch`, then download the
+artifact named `breakingdown-macos`.
+
+## Google OAuth Files
+
+The packaged app does not save the Google token next to the executable.
+
+- Linux: `~/.config/breakingdown/google_oauth_token.json`
+- macOS: `~/Library/Application Support/breakingdown/google_oauth_token.json`
+- Windows: `%APPDATA%\\breakingdown\\google_oauth_token.json`
+
+You can override these paths with:
+
+- `BREAKINGDOWN_GOOGLE_CLIENT_SECRETS_FILE`
+- `BREAKINGDOWN_CONFIG_DIR`
+- `BREAKINGDOWN_GOOGLE_TOKEN_FILE`

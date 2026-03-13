@@ -126,9 +126,21 @@ class Gui:
         self.grupo_de_modo_de_busqueda.addButton(self.boton_de_enviados)
         self.boton_de_enviados.clicked.connect(self.seleccionar_enviados)
 
+        self.boton_de_todos = QPushButton("Todos", self.area_de_contenido)
+        self.boton_de_todos.setCheckable(True)
+        self.boton_de_todos.setGeometry(1250, 90, 120, 30)
+        self.grupo_de_modo_de_busqueda.addButton(self.boton_de_todos)
+        self.boton_de_todos.clicked.connect(self.seleccionar_todos)
+
+
         self.indicador_de_busqueda = QLabel("", self.area_de_contenido)
         self.indicador_de_busqueda.setGeometry(970, 125, 260, 20)
         self.indicador_de_busqueda.hide()
+        
+        self.cantidad_de_encontrados = QLabel("", self.area_de_contenido)
+        self.cantidad_de_encontrados.setGeometry(970, 145, 260, 20)
+        self.cantidad_de_encontrados.hide()
+
 
         self.boton_de_crear_break = QPushButton("Crear Breakdown", self.area_de_contenido)
         self.boton_de_crear_break.clicked.connect(self.crear_breakdown)
@@ -142,6 +154,8 @@ class Gui:
         self.ventana.show()
 
     def buscar(self):
+        self.cantidad_de_encontrados.hide()
+
         if self.busqueda_en_curso:
             self.cancelar_busqueda()
             return
@@ -173,6 +187,7 @@ class Gui:
     def al_recibir_lote(self, mails):
         self.sistema.agregar_mails_encontrados(mails)
         self.mostrador_de_mails_encontrados.agregar_mails(mails)
+        self.actualizar_cantidad_de_entcontrados()
 
     def al_error_en_busqueda(self, mensaje):
         QMessageBox.critical(self.ventana, "Error de busqueda", mensaje)
@@ -197,6 +212,10 @@ class Gui:
 
     def seleccionar_enviados(self):
         self.cambiar_carpeta_de_busqueda("[Gmail]/Sent Mail")
+
+    def seleccionar_todos(self):
+        self.cambiar_carpeta_de_busqueda("[Gmail]/All Mail")
+
 
     def cambiar_carpeta_de_busqueda(self, carpeta):
         carpeta_previa = self.sistema.buscador.carpeta_actual
@@ -265,6 +284,11 @@ class Gui:
 
     def limpiar_buscados(self):
         self.mostrador_de_mails_encontrados.limpiar_mostrador()
+
+
+    def actualizar_cantidad_de_entcontrados(self):
+        self.cantidad_de_encontrados.setText(f"{self.sistema.cantidad_de_encontrados()} resultados")
+        self.cantidad_de_encontrados.show()
 
     def crear_breakdown(self):
         path, _ = QFileDialog.getSaveFileName(
