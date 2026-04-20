@@ -1,6 +1,6 @@
 from datetime import datetime
 from PyQt6.QtGui import QFont
-from PyQt6.QtWidgets import QGroupBox, QGridLayout, QLabel, QLineEdit
+from PyQt6.QtWidgets import QGroupBox, QGridLayout, QLabel, QLineEdit, QSizePolicy
 
 
 class Barra_de_fecha(QLineEdit):
@@ -27,27 +27,24 @@ class Barra_de_fecha(QLineEdit):
 
 class Mostrador_de_condiciones:
 
-
     @classmethod
     def en(self, master, anchura, altura, x, y, sistema):
         return self(master, anchura, altura, x, y, sistema)
-
-
 
     def __init__(self, master, anchura, altura, x, y, sistema):
         self.sistema = sistema
         self.caja_filtros = QGroupBox("Filtros", master)
         self.caja_filtros.setObjectName("filtersPanel")
-        self.caja_filtros.setGeometry(x, y, anchura, altura)
+        self.caja_filtros.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.inicializar_contenidos()
-
-
 
     def inicializar_contenidos(self):
         layout = QGridLayout(self.caja_filtros)
         layout.setContentsMargins(16, 24, 16, 16)
         layout.setHorizontalSpacing(12)
         layout.setVerticalSpacing(10)
+        layout.setColumnStretch(1, 1)
+        layout.setColumnStretch(3, 1)
 
         layout.addWidget(QLabel("Enviado por:"), 0, 0)
         self.barra_de_emisor = QLineEdit()

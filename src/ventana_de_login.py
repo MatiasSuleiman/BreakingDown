@@ -1,5 +1,16 @@
-from PyQt6.QtCore import QObject, QThread, QTimer, pyqtSignal
-from PyQt6.QtWidgets import QMainWindow, QLabel, QLineEdit, QPushButton, QMessageBox
+from PyQt6.QtCore import QObject, QThread, QTimer, Qt, pyqtSignal
+from PyQt6.QtWidgets import (
+    QFrame,
+    QGridLayout,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QMainWindow,
+    QMessageBox,
+    QPushButton,
+    QVBoxLayout,
+    QWidget,
+)
 
 try:
     from src.errores import CredencialesInvalidasError
@@ -44,40 +55,68 @@ class Ventana_de_login(QObject):
         self.ventana = QMainWindow()
         self.ventana.setObjectName("loginWindow")
         self.ventana.setWindowTitle("Login - BreakingDown")
-        self.ventana.setGeometry(500, 250, 520, 260)
+        self.ventana.resize(540, 300)
+        self.ventana.setMinimumSize(460, 260)
 
-        etiqueta_de_bienvenida = QLabel("Iniciar sesion de Gmail", self.ventana)
+        contenido = QWidget()
+        contenido.setObjectName("loginContent")
+        self.ventana.setCentralWidget(contenido)
+        layout_principal = QVBoxLayout(contenido)
+        layout_principal.setContentsMargins(24, 24, 24, 24)
+        layout_principal.setSpacing(18)
+
+        panel_de_login = QFrame(contenido)
+        panel_de_login.setObjectName("controlPanel")
+        layout_panel = QVBoxLayout(panel_de_login)
+        layout_panel.setContentsMargins(18, 18, 18, 18)
+        layout_panel.setSpacing(16)
+        layout_principal.addWidget(panel_de_login)
+
+        etiqueta_de_bienvenida = QLabel("Iniciar sesion de Gmail", panel_de_login)
         etiqueta_de_bienvenida.setObjectName("screenTitle")
-        etiqueta_de_bienvenida.setGeometry(170, 20, 220, 30)
+        etiqueta_de_bienvenida.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout_panel.addWidget(etiqueta_de_bienvenida)
 
-        etiqueta_de_correo = QLabel("Correo:", self.ventana)
-        etiqueta_de_correo.setGeometry(70, 70, 70, 30)
+        formulario = QGridLayout()
+        formulario.setHorizontalSpacing(12)
+        formulario.setVerticalSpacing(12)
+        formulario.setColumnStretch(1, 1)
+        layout_panel.addLayout(formulario)
 
-        self.barra_de_correo = QLineEdit(self.ventana)
+        etiqueta_de_correo = QLabel("Correo:", panel_de_login)
+        formulario.addWidget(etiqueta_de_correo, 0, 0)
+
+        self.barra_de_correo = QLineEdit(panel_de_login)
         self.barra_de_correo.setPlaceholderText("usuario@gmail.com")
-        self.barra_de_correo.setGeometry(140, 70, 300, 30)
+        formulario.addWidget(self.barra_de_correo, 0, 1)
 
-        etiqueta_de_contrasena = QLabel("Contrasena:", self.ventana)
-        etiqueta_de_contrasena.setGeometry(50, 110, 90, 30)
+        etiqueta_de_contrasena = QLabel("Contrasena:", panel_de_login)
+        formulario.addWidget(etiqueta_de_contrasena, 1, 0)
 
-        self.barra_de_contrasena = QLineEdit(self.ventana)
+        self.barra_de_contrasena = QLineEdit(panel_de_login)
         self.barra_de_contrasena.setEchoMode(QLineEdit.EchoMode.Password)
-        self.barra_de_contrasena.setGeometry(140, 110, 300, 30)
+        formulario.addWidget(self.barra_de_contrasena, 1, 1)
 
-        self.boton_de_login = QPushButton("Entrar", self.ventana)
+        fila_botones = QHBoxLayout()
+        fila_botones.setSpacing(10)
+        layout_panel.addLayout(fila_botones)
+
+        self.boton_de_login = QPushButton("Entrar", panel_de_login)
         aplicar_rol_de_boton(self.boton_de_login, "primary")
-        self.boton_de_login.setGeometry(140, 170, 120, 30)
         self.boton_de_login.clicked.connect(self.iniciar_sesion)
+        fila_botones.addStretch()
+        fila_botones.addWidget(self.boton_de_login)
 
-        self.boton_de_login_google = QPushButton("Entrar con Google", self.ventana)
+        self.boton_de_login_google = QPushButton("Entrar con Google", panel_de_login)
         aplicar_rol_de_boton(self.boton_de_login_google, "secondary")
-        self.boton_de_login_google.setGeometry(270, 170, 170, 30)
         self.boton_de_login_google.clicked.connect(self.iniciar_sesion_con_google)
+        fila_botones.addWidget(self.boton_de_login_google)
 
-        self.indicador_de_google = QLabel("", self.ventana)
+        self.indicador_de_google = QLabel("", panel_de_login)
         self.indicador_de_google.setObjectName("statusLabel")
-        self.indicador_de_google.setGeometry(140, 215, 300, 30)
+        self.indicador_de_google.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.indicador_de_google.hide()
+        layout_panel.addWidget(self.indicador_de_google)
 
         self.barra_de_correo.returnPressed.connect(self.iniciar_sesion)
         self.barra_de_contrasena.returnPressed.connect(self.iniciar_sesion)

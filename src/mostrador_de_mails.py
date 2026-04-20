@@ -37,9 +37,10 @@ class Mostrador_de_mails():
 
         self.area = QScrollArea(master)
         self.area.setObjectName("mailPanelArea")
-        self.area.setGeometry(x, y, altura, anchura)
         self.area.setWidgetResizable(True)
         self.area.setFrameShape(QFrame.Shape.NoFrame)
+        self.area.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.area.setMinimumHeight(360)
         aplicar_rol_visual(self.area, "panelRole", self.panel_role())
         self.area.viewport().setObjectName("mailPanelViewport")
 
@@ -72,6 +73,12 @@ class Mostrador_de_mails():
     def ordenar_por_mas_recientes(self, mails):
         return sorted(mails, key=lambda mail: normalizar_datetime_naive(mail.date), reverse=True)
 
+    def valor_actual_del_scroll_vertical(self):
+        return self.area.verticalScrollBar().value()
+
+    def restaurar_scroll_vertical(self, valor):
+        self.area.verticalScrollBar().setValue(valor)
+
     def crear_texto_del_mail(self, frame, mail):
         texto_del_mail = QLabel(
             parent=frame,
@@ -86,9 +93,9 @@ class Mostrador_de_mails():
         ventana_de_descripcion = QDialog(self.contenedor_de_mails)
         ventana_de_descripcion.setObjectName("descriptionDialog")
         ventana_de_descripcion.setWindowTitle(f"{mail.subject} description")
-        ventana_de_descripcion.setGeometry(100, 100, 300, 400)
+        ventana_de_descripcion.resize(520, 380)
 
-        layout = QVBoxLayout()
+        layout = QVBoxLayout(ventana_de_descripcion)
         layout.setContentsMargins(16, 16, 16, 16)
         lector_de_texto = QTextEdit(ventana_de_descripcion)
         lector_de_texto.setObjectName("descriptionEditor")
@@ -101,7 +108,6 @@ class Mostrador_de_mails():
         )
         layout.addWidget(lector_de_texto)
 
-        ventana_de_descripcion.setLayout(layout)
         ventana_de_descripcion.show()
         ventana_de_descripcion.raise_()
         ventana_de_descripcion.activateWindow()
@@ -162,6 +168,8 @@ class Mostrador_de_mails_buscados(Mostrador_de_mails):
         self.layout.addWidget(frame)
 
     def agregar_mails(self, mails):
+        valor_actual_del_scroll = self.valor_actual_del_scroll_vertical()
+
         for mail in mails:
             if mail not in self.mails:
                 self.mails.append(mail)
@@ -171,6 +179,7 @@ class Mostrador_de_mails_buscados(Mostrador_de_mails):
         self.mails = list(mails_ordenados)
         for mail in self.mails:
             self.agregar_mail(mail)
+        self.restaurar_scroll_vertical(valor_actual_del_scroll)
 
     def mostrar(self, mails):
         mails_ordenados = self.ordenar_por_mas_recientes(mails)

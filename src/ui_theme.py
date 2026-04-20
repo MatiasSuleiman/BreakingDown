@@ -10,14 +10,10 @@ QDialog {
 }
 
 QWidget#mainContent,
-QWidget#mailPanelContent {
+QWidget#mailPanelContent,
+QWidget#loginContent {
     background: transparent;
     color: #1f2a37;
-}
-
-QScrollArea#mainScrollArea {
-    border: none;
-    background: #f4f7fb;
 }
 
 QLabel {
@@ -140,6 +136,12 @@ QGroupBox#filtersPanel::title {
     left: 14px;
     padding: 0 8px;
     color: #1d4ed8;
+}
+
+QFrame#controlPanel {
+    background: #ffffff;
+    border: 1px solid #d7e1ee;
+    border-radius: 16px;
 }
 
 QScrollArea#mailPanelArea {
