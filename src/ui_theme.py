@@ -111,6 +111,31 @@ QPushButton[buttonRole="toggle"]:checked {
     border: 1px solid #7aa5f7;
 }
 
+QPushButton[buttonRole="filterToggle"] {
+    background: transparent;
+    color: #45627f;
+    border: none;
+    border-radius: 8px;
+    padding: 4px 6px;
+    font-weight: 600;
+}
+
+QPushButton[buttonRole="filterToggle"]:hover {
+    background: #eff5ff;
+    color: #1d4ed8;
+    border: none;
+}
+
+QPushButton[buttonRole="filterToggle"]:pressed {
+    background: #e5eefc;
+    border: none;
+}
+
+QPushButton[buttonRole="filterToggle"]:focus {
+    outline: none;
+    border: 1px solid #b9cde7;
+}
+
 QPushButton[buttonRole="danger"] {
     background: #fff6f5;
     color: #9f2d2d;
@@ -126,16 +151,18 @@ QGroupBox#filtersPanel {
     background: #ffffff;
     border: 1px solid #d7e1ee;
     border-radius: 16px;
-    margin-top: 14px;
+    margin-top: 0px;
     color: #16314f;
     font-weight: 600;
 }
 
 QGroupBox#filtersPanel::title {
     subcontrol-origin: margin;
-    left: 14px;
-    padding: 0 8px;
-    color: #1d4ed8;
+    left: 0px;
+    padding: 0px;
+    color: transparent;
+    width: 0px;
+    height: 0px;
 }
 
 QFrame#controlPanel {

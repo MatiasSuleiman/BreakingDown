@@ -71,6 +71,9 @@ class Hilo_de_busqueda(QThread):
 
 
 class Gui:
+    TEXTO_BOTON_FILTROS_COLAPSADO = "Filtros ▾"
+    TEXTO_BOTON_FILTROS_EXPANDIDO = "Filtros ▴"
+
     def __init__(self, sistema, al_volver_al_login=None):
         self.sistema = sistema
         self.al_volver_al_login = al_volver_al_login
@@ -96,18 +99,42 @@ class Gui:
         fila_superior.setSpacing(18)
         layout_principal.addLayout(fila_superior)
 
+        self.slot_de_filtros = QWidget(self.area_de_contenido)
+        self.slot_de_filtros.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        layout_slot_de_filtros = QVBoxLayout(self.slot_de_filtros)
+        layout_slot_de_filtros.setContentsMargins(0, 0, 0, 0)
+        layout_slot_de_filtros.setSpacing(8)
+        fila_superior.addWidget(self.slot_de_filtros, 1, Qt.AlignmentFlag.AlignTop)
+
+        fila_encabezado_de_filtros = QHBoxLayout()
+        fila_encabezado_de_filtros.setContentsMargins(0, 0, 0, 0)
+        fila_encabezado_de_filtros.setSpacing(0)
+        layout_slot_de_filtros.addLayout(fila_encabezado_de_filtros)
+
+        self.boton_de_filtros = QPushButton(self.slot_de_filtros)
+        aplicar_rol_de_boton(self.boton_de_filtros, "filterToggle")
+        self.boton_de_filtros.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        self.boton_de_filtros.clicked.connect(
+            lambda: self.alternar_filtros(self.boton_de_filtros.text())
+        )
+        self.boton_de_filtros.setText(self.TEXTO_BOTON_FILTROS_COLAPSADO)
+        fila_encabezado_de_filtros.addWidget(self.boton_de_filtros, 0, Qt.AlignmentFlag.AlignLeft)
+        fila_encabezado_de_filtros.addStretch()
+
         self.mostrador_de_condiciones = Mostrador_de_condiciones.en(
             self.area_de_contenido, 700, 120, 20, 10, self.sistema
         )
-        fila_superior.addWidget(self.mostrador_de_condiciones.caja_filtros, 1)
+        self.cuerpo_de_filtros = self.mostrador_de_condiciones.caja_filtros
+        self.cuerpo_de_filtros.hide()
+        layout_slot_de_filtros.addWidget(self.cuerpo_de_filtros)
 
-        panel_de_controles = QFrame(self.area_de_contenido)
-        panel_de_controles.setObjectName("controlPanel")
-        panel_de_controles.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        layout_panel_de_controles = QVBoxLayout(panel_de_controles)
+        self.panel_de_controles = QFrame(self.area_de_contenido)
+        self.panel_de_controles.setObjectName("controlPanel")
+        self.panel_de_controles.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        layout_panel_de_controles = QVBoxLayout(self.panel_de_controles)
         layout_panel_de_controles.setContentsMargins(18, 18, 18, 18)
         layout_panel_de_controles.setSpacing(12)
-        fila_superior.addWidget(panel_de_controles, 1)
+        fila_superior.addWidget(self.panel_de_controles, 1)
 
         fila_de_busqueda = QHBoxLayout()
         fila_de_busqueda.setSpacing(10)
@@ -129,21 +156,21 @@ class Gui:
             self.area_de_contenido, 700, 610, 880, 180, self
         )
 
-        self.boton_de_busqueda = QPushButton("Buscar", panel_de_controles)
+        self.boton_de_busqueda = QPushButton("Buscar", self.panel_de_controles)
         aplicar_rol_de_boton(self.boton_de_busqueda, "primary")
         self.boton_de_busqueda.clicked.connect(self.buscar)
         self.boton_de_busqueda.setMinimumWidth(96)
         fila_de_busqueda.addWidget(self.boton_de_busqueda)
 
-        self.barra_de_busqueda = QLineEdit(panel_de_controles)
+        self.barra_de_busqueda = QLineEdit(self.panel_de_controles)
         self.barra_de_busqueda.setPlaceholderText("Buscar por asunto")
         self.barra_de_busqueda.returnPressed.connect(self.buscar)
         fila_de_busqueda.addWidget(self.barra_de_busqueda, 1)
 
-        self.grupo_de_modo_de_busqueda = QButtonGroup(panel_de_controles)
+        self.grupo_de_modo_de_busqueda = QButtonGroup(self.panel_de_controles)
         self.grupo_de_modo_de_busqueda.setExclusive(True)
 
-        self.boton_de_recibidos = QPushButton("Recibidos", panel_de_controles)
+        self.boton_de_recibidos = QPushButton("Recibidos", self.panel_de_controles)
         aplicar_rol_de_boton(self.boton_de_recibidos, "toggle")
         self.boton_de_recibidos.setCheckable(True)
         self.boton_de_recibidos.setChecked(True)
@@ -151,14 +178,14 @@ class Gui:
         self.boton_de_recibidos.clicked.connect(self.seleccionar_recibidos)
         fila_de_modos_de_busqueda.addWidget(self.boton_de_recibidos)
 
-        self.boton_de_enviados = QPushButton("Enviados", panel_de_controles)
+        self.boton_de_enviados = QPushButton("Enviados", self.panel_de_controles)
         aplicar_rol_de_boton(self.boton_de_enviados, "toggle")
         self.boton_de_enviados.setCheckable(True)
         self.grupo_de_modo_de_busqueda.addButton(self.boton_de_enviados)
         self.boton_de_enviados.clicked.connect(self.seleccionar_enviados)
         fila_de_modos_de_busqueda.addWidget(self.boton_de_enviados)
 
-        self.boton_de_todos = QPushButton("Todos", panel_de_controles)
+        self.boton_de_todos = QPushButton("Todos", self.panel_de_controles)
         aplicar_rol_de_boton(self.boton_de_todos, "toggle")
         self.boton_de_todos.setCheckable(True)
         self.grupo_de_modo_de_busqueda.addButton(self.boton_de_todos)
@@ -166,12 +193,12 @@ class Gui:
         fila_de_modos_de_busqueda.addWidget(self.boton_de_todos)
         fila_de_modos_de_busqueda.addStretch()
 
-        self.indicador_de_busqueda = QLabel("", panel_de_controles)
+        self.indicador_de_busqueda = QLabel("", self.panel_de_controles)
         self.indicador_de_busqueda.setObjectName("statusLabel")
         self.indicador_de_busqueda.hide()
         fila_de_estado.addWidget(self.indicador_de_busqueda)
         
-        self.cantidad_de_encontrados = QLabel("", panel_de_controles)
+        self.cantidad_de_encontrados = QLabel("", self.panel_de_controles)
         self.cantidad_de_encontrados.setObjectName("resultCountLabel")
         self.cantidad_de_encontrados.hide()
         fila_de_estado.addWidget(self.cantidad_de_encontrados)
@@ -199,6 +226,15 @@ class Gui:
 
         self.seleccionar_recibidos()
         self.ventana.show()
+
+    def alternar_filtros(self, texto_actual):
+        filtros_estan_ocultos = texto_actual == self.TEXTO_BOTON_FILTROS_COLAPSADO
+        self.cuerpo_de_filtros.setVisible(filtros_estan_ocultos)
+        self.boton_de_filtros.setText(
+            self.TEXTO_BOTON_FILTROS_EXPANDIDO
+            if filtros_estan_ocultos
+            else self.TEXTO_BOTON_FILTROS_COLAPSADO
+        )
 
     def buscar(self):
         self.cantidad_de_encontrados.hide()

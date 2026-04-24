@@ -33,14 +33,14 @@ class Mostrador_de_condiciones:
 
     def __init__(self, master, anchura, altura, x, y, sistema):
         self.sistema = sistema
-        self.caja_filtros = QGroupBox("Filtros", master)
+        self.caja_filtros = QGroupBox("", master)
         self.caja_filtros.setObjectName("filtersPanel")
         self.caja_filtros.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.inicializar_contenidos()
 
     def inicializar_contenidos(self):
         layout = QGridLayout(self.caja_filtros)
-        layout.setContentsMargins(16, 24, 16, 16)
+        layout.setContentsMargins(16, 16, 16, 16)
         layout.setHorizontalSpacing(12)
         layout.setVerticalSpacing(10)
         layout.setColumnStretch(1, 1)
