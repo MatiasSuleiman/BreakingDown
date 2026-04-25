@@ -1,5 +1,5 @@
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
 import sys
@@ -96,12 +96,12 @@ class FakeSistema:
         return len(self.mails_encontrados)
 
 
-def make_mail(uid, subject="Invoice", body="invoice body"):
+def make_mail(uid, subject="Invoice", body="invoice body", date=None):
     return SimpleNamespace(
         uid=uid,
         subject=subject,
         from_="lawyer@example.com",
-        date=datetime(2026, 3, 6, 12, 0, 0),
+        date=date or datetime(2026, 3, 6, 12, 0, 0),
         text=body,
     )
 
@@ -117,10 +117,15 @@ def wait_for_searches_to_finish(app, gui, max_cycles=50):
             break
 
 
+def flush_qt_events(app, cycles=3):
+    for _ in range(cycles):
+        app.processEvents()
+
+
 def test_gui_inicia_con_filtros_ocultos():
     app = get_app()
     gui = Gui(FakeSistema())
-    app.processEvents()
+    flush_qt_events(app)
 
     assert gui.cuerpo_de_filtros.isHidden() is True
     assert gui.boton_de_filtros.text() == Gui.TEXTO_BOTON_FILTROS_COLAPSADO
@@ -137,18 +142,18 @@ def test_gui_inicia_con_filtros_ocultos():
 def test_toggle_de_filtros_muestra_y_oculta_el_panel_sin_mover_el_panel_derecho():
     app = get_app()
     gui = Gui(FakeSistema())
-    app.processEvents()
+    flush_qt_events(app)
     ancho_inicial = gui.panel_de_controles.width()
 
     gui.boton_de_filtros.click()
-    app.processEvents()
+    flush_qt_events(app)
 
     assert gui.cuerpo_de_filtros.isHidden() is False
     assert gui.boton_de_filtros.text() == Gui.TEXTO_BOTON_FILTROS_EXPANDIDO
     assert abs(gui.panel_de_controles.width() - ancho_inicial) <= 2
 
     gui.boton_de_filtros.click()
-    app.processEvents()
+    flush_qt_events(app)
 
     assert gui.cuerpo_de_filtros.isHidden() is True
     assert gui.boton_de_filtros.text() == Gui.TEXTO_BOTON_FILTROS_COLAPSADO
@@ -163,7 +168,7 @@ def test_filtros_conservan_valores_al_ocultarse_y_mostrarse():
     gui = Gui(FakeSistema())
 
     gui.boton_de_filtros.click()
-    app.processEvents()
+    flush_qt_events(app)
 
     gui.mostrador_de_condiciones.barra_de_emisor.setText("lawyer@example.com")
     gui.mostrador_de_condiciones.barra_de_receptor.setText("client@example.com")
@@ -257,6 +262,106 @@ def test_mail_de_cuerpo_que_luego_llega_por_asunto_se_actualiza_sin_duplicarse_y
     assert len(tarjetas_break) == 0
     assert len(tarjetas_encontradas) == 1
     assert tarjetas_encontradas[0].property("matchRole") == "subject"
+
+    gui.ventana.close()
+    app.quit()
+
+
+def test_gui_preserva_scroll_al_recibir_un_lote_de_resultados():
+    app = get_app()
+    gui = Gui(FakeSistema())
+    fecha_base = datetime(2026, 3, 6, 12, 0, 0)
+
+    gui.al_recibir_lote_de_asunto(
+        [
+            make_mail(
+                str(indice),
+                date=fecha_base + timedelta(minutes=indice),
+            )
+            for indice in range(30)
+        ]
+    )
+    flush_qt_events(app)
+
+    scroll = gui.mostrador_de_mails_encontrados.area.verticalScrollBar()
+    assert scroll.maximum() > 0
+    valor_esperado = max(1, scroll.maximum() // 2)
+    scroll.setValue(valor_esperado)
+    flush_qt_events(app)
+
+    gui.al_recibir_lote_de_asunto(
+        [
+            make_mail(
+                f"nuevo-{indice}",
+                date=fecha_base + timedelta(minutes=60 + indice),
+            )
+            for indice in range(3)
+        ]
+    )
+    flush_qt_events(app)
+
+    assert scroll.value() == valor_esperado
+    gui.ventana.close()
+    app.quit()
+
+
+def test_gui_coalescea_lotes_pendientes_en_un_solo_render():
+    app = get_app()
+    gui = Gui(FakeSistema())
+    llamadas_de_render = []
+    registrar_original = gui.mostrador_de_mails_encontrados.registrar_lotes_de_busqueda
+
+    def registrar_con_conteo(*args, **kwargs):
+        llamadas_de_render.append(kwargs)
+        return registrar_original(*args, **kwargs)
+
+    gui.mostrador_de_mails_encontrados.registrar_lotes_de_busqueda = registrar_con_conteo
+
+    gui.al_recibir_lote_de_cuerpo([make_mail("1", subject="Body hit")])
+    gui.al_recibir_lote_de_asunto([make_mail("2", subject="Subject hit")])
+    flush_qt_events(app)
+
+    tarjetas_encontradas = gui.mostrador_de_mails_encontrados.contenedor_de_mails.findChildren(
+        QWidget, "mailCard"
+    )
+
+    assert len(llamadas_de_render) == 1
+    assert len(tarjetas_encontradas) == 2
+    assert gui.sistema.cantidad_de_encontrados() == 2
+
+    gui.ventana.close()
+    app.quit()
+
+
+def test_gui_clampea_scroll_si_el_contenido_deja_de_tener_scroll():
+    app = get_app()
+    gui = Gui(FakeSistema())
+
+    gui.mostrador_de_mails_encontrados.restaurar_scroll_vertical(9999)
+
+    scroll = gui.mostrador_de_mails_encontrados.area.verticalScrollBar()
+    assert scroll.value() == 0
+
+    gui.ventana.close()
+    app.quit()
+
+
+def test_gui_no_finaliza_busqueda_hasta_renderizar_lotes_pendientes():
+    app = get_app()
+    gui = Gui(FakeSistema())
+    gui.busqueda_en_curso = True
+    gui.busquedas_activas = {"asunto"}
+
+    gui.al_recibir_lote_de_asunto([make_mail("1")])
+    gui.al_finalizar_busqueda_de("asunto")
+
+    assert gui.busqueda_en_curso is True
+
+    flush_qt_events(app)
+
+    assert gui.busqueda_en_curso is False
+    assert gui.boton_de_busqueda.text() == "Buscar"
+    assert gui.sistema.cantidad_de_encontrados() == 1
 
     gui.ventana.close()
     app.quit()

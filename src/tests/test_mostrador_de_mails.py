@@ -40,16 +40,16 @@ class FakeUi:
 
 
 class FakeMail:
-    def __init__(self):
-        self.uid = "mail-1"
+    def __init__(self, uid="mail-1"):
+        self.uid = uid
         self.subject = "Invoice"
         self.from_ = "lawyer@example.com"
         self.date = datetime(2026, 3, 6, 12, 0, 0)
         self.text = "body"
 
 
-def make_mail():
-    return FakeMail()
+def make_mail(uid="mail-1"):
+    return FakeMail(uid)
 
 
 def get_app():
@@ -117,6 +117,35 @@ def test_mostrador_puede_actualizar_un_mail_a_match_por_asunto():
 
     tarjetas = mostrador.contenedor_de_mails.findChildren(QWidget, "mailCard")
 
+    assert len(tarjetas) == 1
+    assert tarjetas[0].property("matchRole") == "subject"
+    app.quit()
+
+
+def test_mostrador_registra_lotes_en_un_solo_render():
+    app = get_app()
+    master = QWidget()
+    ui = FakeUi()
+    mail_de_cuerpo = make_mail("mail-1")
+    mail_de_asunto = make_mail("mail-1")
+    mostrador = Mostrador_de_mails_buscados.en(master, 700, 610, 20, 180, ui)
+    renders = []
+    render_original = mostrador._renderizar_desde_estado
+
+    def render_con_conteo(*args, **kwargs):
+        renders.append((args, kwargs))
+        return render_original(*args, **kwargs)
+
+    mostrador._renderizar_desde_estado = render_con_conteo
+
+    mostrador.registrar_lotes_de_busqueda(
+        mails_por_cuerpo=[mail_de_cuerpo],
+        mails_actualizados_a_asunto=[mail_de_asunto],
+    )
+
+    tarjetas = mostrador.contenedor_de_mails.findChildren(QWidget, "mailCard")
+
+    assert len(renders) == 1
     assert len(tarjetas) == 1
     assert tarjetas[0].property("matchRole") == "subject"
     app.quit()

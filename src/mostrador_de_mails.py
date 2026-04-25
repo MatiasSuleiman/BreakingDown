@@ -1,5 +1,5 @@
 from functools import partial
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import QTimer, Qt
 from PyQt6.QtGui import QIntValidator
 from PyQt6.QtWidgets import (
     QDialog,
@@ -84,7 +84,15 @@ class Mostrador_de_mails:
         return self.area.verticalScrollBar().value()
 
     def restaurar_scroll_vertical(self, valor):
-        self.area.verticalScrollBar().setValue(valor)
+        scroll = self.area.verticalScrollBar()
+        maximo = scroll.maximum()
+        if maximo <= 0:
+            return
+        valor_clampeado = max(scroll.minimum(), min(valor, maximo))
+        scroll.setValue(valor_clampeado)
+
+    def restaurar_scroll_vertical_despues_de_layout(self, valor):
+        QTimer.singleShot(0, lambda valor=valor: self.restaurar_scroll_vertical(valor))
 
     def crear_texto_del_mail(self, frame, mail):
         texto_del_mail = QLabel(
@@ -169,43 +177,88 @@ class Mostrador_de_mails:
         self._registrar_mail(mail, True)
 
     def _registrar_mail(self, mail, es_por_asunto):
+        cambio = self._registrar_mail_en_estado(mail, es_por_asunto)
+        if cambio:
+            self._renderizar_desde_estado(preservar_scroll=True)
+
+    def registrar_lotes_de_busqueda(
+        self,
+        mails_por_cuerpo=None,
+        mails_por_asunto=None,
+        mails_actualizados_a_asunto=None,
+    ):
+        cambio = False
+        for mail in mails_por_cuerpo or []:
+            cambio = self._registrar_mail_en_estado(mail, False) or cambio
+        for mail in mails_por_asunto or []:
+            cambio = self._registrar_mail_en_estado(mail, True) or cambio
+        for mail in mails_actualizados_a_asunto or []:
+            cambio = self._registrar_mail_en_estado(mail, True) or cambio
+
+        if cambio:
+            self._renderizar_desde_estado(preservar_scroll=True)
+
+    def _registrar_mail_en_estado(self, mail, es_por_asunto):
         clave = self.clave_de_mail(mail)
+        cambio = False
         if clave not in self.mails_por_clave:
             self.mails_por_clave[clave] = mail
+            cambio = True
         if es_por_asunto or clave not in self.es_mail_por_asunto:
+            if self.es_mail_por_asunto.get(clave) != es_por_asunto:
+                cambio = True
             self.es_mail_por_asunto[clave] = es_por_asunto
-        self._renderizar_desde_estado()
+        return cambio
 
-    def _renderizar_desde_estado(self):
-        valor_actual_del_scroll = self.valor_actual_del_scroll_vertical()
-        self._limpiar_widgets()
+    def _renderizar_desde_estado(self, preservar_scroll=False):
+        valor_actual_del_scroll = self.valor_actual_del_scroll_vertical() if preservar_scroll else 0
 
-        self.mails = self.ordenar_por_mas_recientes(self.mails_por_clave.values())
-        for mail in self.mails:
-            self.agregar_mail_renderizado(
-                mail,
-                self.es_mail_por_asunto.get(self.clave_de_mail(mail), False),
-            )
-        self.restaurar_scroll_vertical(valor_actual_del_scroll)
+        self.area.setUpdatesEnabled(False)
+        self.contenedor_de_mails.setUpdatesEnabled(False)
+        try:
+            self._limpiar_widgets()
+
+            self.mails = self.ordenar_por_mas_recientes(self.mails_por_clave.values())
+            for mail in self.mails:
+                self.agregar_mail_renderizado(
+                    mail,
+                    self.es_mail_por_asunto.get(self.clave_de_mail(mail), False),
+                )
+        finally:
+            self.contenedor_de_mails.setUpdatesEnabled(True)
+            self.area.setUpdatesEnabled(True)
+
+        if preservar_scroll:
+            self.restaurar_scroll_vertical_despues_de_layout(valor_actual_del_scroll)
 
     def mostrar(self, mails, es_mail_por_asunto=None):
-        self._limpiar_widgets()
-        self.mails_por_clave = {}
-        self.es_mail_por_asunto = {}
 
-        for mail in mails:
-            clave = self.clave_de_mail(mail)
-            self.mails_por_clave[clave] = mail
-            self.es_mail_por_asunto[clave] = (
-                es_mail_por_asunto(mail) if es_mail_por_asunto is not None else False
-            )
+        valor_actual_del_scroll = self.valor_actual_del_scroll_vertical()
+        self.area.setUpdatesEnabled(False)
+        self.contenedor_de_mails.setUpdatesEnabled(False)
 
-        self.mails = self.ordenar_por_mas_recientes(self.mails_por_clave.values())
-        for mail in self.mails:
-            self.agregar_mail_renderizado(
-                mail,
-                self.es_mail_por_asunto.get(self.clave_de_mail(mail), False),
-            )
+        try:
+            self._limpiar_widgets()
+            self.mails_por_clave = {}
+            self.es_mail_por_asunto = {}
+
+            for mail in mails:
+                clave = self.clave_de_mail(mail)
+                self.mails_por_clave[clave] = mail
+                self.es_mail_por_asunto[clave] = (
+                    es_mail_por_asunto(mail) if es_mail_por_asunto is not None else False
+                )
+
+            self.mails = self.ordenar_por_mas_recientes(self.mails_por_clave.values())
+            for mail in self.mails:
+                self.agregar_mail_renderizado(
+                    mail,
+                    self.es_mail_por_asunto.get(self.clave_de_mail(mail), False),
+                )
+        finally:
+            self.contenedor_de_mails.setUpdatesEnabled(True)
+            self.area.setUpdatesEnabled(True)
+            self.restaurar_scroll_vertical_despues_de_layout(valor_actual_del_scroll)
 
     def agregar_mail_renderizado(self, mail, es_por_asunto):
         raise NotImplementedError("subclass should implement agregar_mail_renderizado")

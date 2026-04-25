@@ -1,4 +1,7 @@
-from PyQt6.QtCore import QObject, QThread, Qt, pyqtSignal
+import os
+import time
+
+from PyQt6.QtCore import QObject, QThread, QTimer, Qt, pyqtSignal
 from PyQt6.QtWidgets import (
     QButtonGroup,
     QDialog,
@@ -26,6 +29,11 @@ except ModuleNotFoundError:
     from ui_theme import aplicar_rol_de_boton, aplicar_tema_compartido
 
 
+def log_debug_busqueda(mensaje):
+    if os.environ.get("BREAKINGDOWN_DEBUG_SEARCH"):
+        print(f"[breakingdown search] {mensaje}", flush=True)
+
+
 class Senales_de_busqueda(QObject):
     lote_listo = pyqtSignal(list)
     error = pyqtSignal(str)
@@ -48,19 +56,35 @@ class Batcher_de_busqueda:
 
     def ejecutar(self):
         lote = []
+        cantidad = 0
+        inicio = time.perf_counter()
+        log_debug_busqueda(f"{self.__class__.__name__}: inicio texto={self.texto!r}")
         try:
             for mail in self.buscar_mails():
                 if self.cancelada:
                     break
                 lote.append(mail)
+                cantidad += 1
                 if len(lote) >= self.tamanio_de_lote:
+                    log_debug_busqueda(
+                        f"{self.__class__.__name__}: emite lote={len(lote)} total={cantidad}"
+                    )
                     self.senales.lote_listo.emit(lote)
                     lote = []
             if lote and not self.cancelada:
+                log_debug_busqueda(
+                    f"{self.__class__.__name__}: emite lote={len(lote)} total={cantidad}"
+                )
                 self.senales.lote_listo.emit(lote)
         except Exception as error:
+            log_debug_busqueda(f"{self.__class__.__name__}: error={error}")
             self.senales.error.emit(str(error))
         finally:
+            duracion = time.perf_counter() - inicio
+            log_debug_busqueda(
+                f"{self.__class__.__name__}: finalizado total={cantidad} "
+                f"cancelada={self.cancelada} duracion={duracion:.3f}s"
+            )
             self.senales.finalizado.emit()
 
 
@@ -97,6 +121,10 @@ class Gui:
         self.busquedas_finalizadas = set()
         self.mails_encontrados_por_asunto = {}
         self.mails_encontrados_por_cuerpo = {}
+        self.lotes_pendientes_por_asunto = []
+        self.lotes_pendientes_por_cuerpo = []
+        self.procesamiento_de_lotes_programado = False
+        self.procesando_lotes = False
 
         aplicar_tema_compartido()
 
@@ -257,6 +285,10 @@ class Gui:
         self.hilos_de_busqueda = {}
         self.busquedas_activas = set()
         self.busquedas_finalizadas = set()
+        self.lotes_pendientes_por_asunto = []
+        self.lotes_pendientes_por_cuerpo = []
+        self.procesamiento_de_lotes_programado = False
+        self.procesando_lotes = False
 
     def reiniciar_origenes_de_resultados(self):
         self.mails_encontrados_por_asunto = {}
@@ -323,6 +355,88 @@ class Gui:
         hilo.start()
 
     def al_recibir_lote_de_asunto(self, mails):
+        self.encolar_lote_de_busqueda("asunto", mails)
+
+    def al_recibir_lote_de_cuerpo(self, mails):
+        self.encolar_lote_de_busqueda("cuerpo", mails)
+
+    def encolar_lote_de_busqueda(self, tipo, mails):
+        if not mails:
+            return
+
+        if tipo == "asunto":
+            self.lotes_pendientes_por_asunto.append(list(mails))
+        else:
+            self.lotes_pendientes_por_cuerpo.append(list(mails))
+
+        log_debug_busqueda(
+            f"gui: lote recibido tipo={tipo} tamanio={len(mails)} "
+            f"pendientes_asunto={len(self.lotes_pendientes_por_asunto)} "
+            f"pendientes_cuerpo={len(self.lotes_pendientes_por_cuerpo)}"
+        )
+
+        if self.procesamiento_de_lotes_programado:
+            return
+
+        self.procesamiento_de_lotes_programado = True
+        QTimer.singleShot(0, self.procesar_lotes_pendientes)
+
+    def procesar_lotes_pendientes(self):
+        if self.procesando_lotes:
+            QTimer.singleShot(0, self.procesar_lotes_pendientes)
+            return
+
+        lotes_por_asunto = self.lotes_pendientes_por_asunto
+        lotes_por_cuerpo = self.lotes_pendientes_por_cuerpo
+        self.lotes_pendientes_por_asunto = []
+        self.lotes_pendientes_por_cuerpo = []
+        self.procesamiento_de_lotes_programado = False
+
+        mails_por_asunto = [mail for lote in lotes_por_asunto for mail in lote]
+        mails_por_cuerpo = [mail for lote in lotes_por_cuerpo for mail in lote]
+        if not mails_por_asunto and not mails_por_cuerpo:
+            return
+
+        self.procesando_lotes = True
+        inicio = time.perf_counter()
+        scroll = self.mostrador_de_mails_encontrados.area.verticalScrollBar()
+        log_debug_busqueda(
+            f"gui: procesa lotes asunto={len(mails_por_asunto)} cuerpo={len(mails_por_cuerpo)} "
+            f"scroll={scroll.value()}/{scroll.maximum()}"
+        )
+
+        try:
+            mails_nuevos_por_cuerpo = self.procesar_lote_de_cuerpo(mails_por_cuerpo)
+            (
+                mails_nuevos_por_asunto,
+                mails_actualizados_a_asunto,
+            ) = self.procesar_lote_de_asunto(mails_por_asunto)
+            self.mostrador_de_mails_encontrados.registrar_lotes_de_busqueda(
+                mails_por_cuerpo=mails_nuevos_por_cuerpo,
+                mails_por_asunto=mails_nuevos_por_asunto,
+                mails_actualizados_a_asunto=mails_actualizados_a_asunto,
+            )
+            self.actualizar_cantidad_de_entcontrados()
+        finally:
+            duracion = time.perf_counter() - inicio
+            scroll = self.mostrador_de_mails_encontrados.area.verticalScrollBar()
+            log_debug_busqueda(
+                f"gui: lotes procesados duracion={duracion:.3f}s "
+                f"scroll={scroll.value()}/{scroll.maximum()} "
+                f"resultados={self.sistema.cantidad_de_encontrados()}"
+            )
+            self.procesando_lotes = False
+
+        if self.lotes_pendientes_por_asunto or self.lotes_pendientes_por_cuerpo:
+            self.procesamiento_de_lotes_programado = True
+            QTimer.singleShot(0, self.procesar_lotes_pendientes)
+            return
+
+        self.finalizar_busqueda_si_corresponde()
+
+    def procesar_lote_de_asunto(self, mails):
+        mails_nuevos = []
+        mails_actualizados_a_asunto = []
         for mail in mails:
             clave = self.clave_de_mail(mail)
             if clave in self.mails_encontrados_por_asunto:
@@ -330,15 +444,16 @@ class Gui:
 
             self.mails_encontrados_por_asunto[clave] = mail
             if clave in self.mails_encontrados_por_cuerpo:
-                self.mostrador_de_mails_encontrados.actualizar_mail_a_asunto(mail)
+                mails_actualizados_a_asunto.append(mail)
                 continue
 
             self.sistema.agregar_mails_encontrados([mail])
-            self.mostrador_de_mails_encontrados.agregar_mail_por_asunto(mail)
+            mails_nuevos.append(mail)
 
-        self.actualizar_cantidad_de_entcontrados()
+        return mails_nuevos, mails_actualizados_a_asunto
 
-    def al_recibir_lote_de_cuerpo(self, mails):
+    def procesar_lote_de_cuerpo(self, mails):
+        mails_nuevos = []
         for mail in mails:
             clave = self.clave_de_mail(mail)
             if clave in self.mails_encontrados_por_asunto or clave in self.mails_encontrados_por_cuerpo:
@@ -346,16 +461,31 @@ class Gui:
 
             self.mails_encontrados_por_cuerpo[clave] = mail
             self.sistema.agregar_mails_encontrados([mail])
-            self.mostrador_de_mails_encontrados.agregar_mail_por_cuerpo(mail)
+            mails_nuevos.append(mail)
 
-        self.actualizar_cantidad_de_entcontrados()
+        return mails_nuevos
 
     def al_error_en_busqueda(self, mensaje):
         QMessageBox.critical(self.ventana, "Error de busqueda", mensaje)
 
     def al_finalizar_busqueda_de(self, tipo):
         self.busquedas_finalizadas.add(tipo)
-        if self.busquedas_activas and self.busquedas_finalizadas == self.busquedas_activas:
+        self.finalizar_busqueda_si_corresponde()
+
+    def hay_lotes_de_busqueda_pendientes(self):
+        return (
+            self.procesamiento_de_lotes_programado
+            or self.procesando_lotes
+            or bool(self.lotes_pendientes_por_asunto)
+            or bool(self.lotes_pendientes_por_cuerpo)
+        )
+
+    def finalizar_busqueda_si_corresponde(self):
+        if (
+            self.busquedas_activas
+            and self.busquedas_finalizadas == self.busquedas_activas
+            and not self.hay_lotes_de_busqueda_pendientes()
+        ):
             self.busqueda_en_curso = False
             self.restaurar_estado_visual_de_busqueda()
 
