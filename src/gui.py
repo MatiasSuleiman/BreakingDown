@@ -355,31 +355,32 @@ class Gui:
         hilo.start()
 
     def al_recibir_lote_de_asunto(self, mails):
-        self.encolar_lote_de_busqueda("asunto", mails)
+        self.encolar_lote_de_busqueda_de_asunto(mails)
 
     def al_recibir_lote_de_cuerpo(self, mails):
-        self.encolar_lote_de_busqueda("cuerpo", mails)
+        self.encolar_lote_de_busqueda_de_cuerpo(mails)
 
-    def encolar_lote_de_busqueda(self, tipo, mails):
+    def encolar_lote_de_busqueda_de_asunto(self, mails):
         if not mails:
             return
-
-        if tipo == "asunto":
-            self.lotes_pendientes_por_asunto.append(list(mails))
-        else:
-            self.lotes_pendientes_por_cuerpo.append(list(mails))
-
-        log_debug_busqueda(
-            f"gui: lote recibido tipo={tipo} tamanio={len(mails)} "
-            f"pendientes_asunto={len(self.lotes_pendientes_por_asunto)} "
-            f"pendientes_cuerpo={len(self.lotes_pendientes_por_cuerpo)}"
-        )
+        self.lotes_pendientes_por_asunto.append(list(mails))
 
         if self.procesamiento_de_lotes_programado:
             return
 
         self.procesamiento_de_lotes_programado = True
         QTimer.singleShot(0, self.procesar_lotes_pendientes)
+
+    def encolar_lote_de_busqueda_de_cuerpo(self, mails):
+        if not mails:
+            return
+        self.lotes_pendientes_por_cuerpo.append(list(mails))
+        if self.procesamiento_de_lotes_programado:
+            return
+
+        self.procesamiento_de_lotes_programado = True
+        QTimer.singleShot(0, self.procesar_lotes_pendientes)
+
 
     def procesar_lotes_pendientes(self):
         if self.procesando_lotes:
@@ -398,12 +399,6 @@ class Gui:
             return
 
         self.procesando_lotes = True
-        inicio = time.perf_counter()
-        scroll = self.mostrador_de_mails_encontrados.area.verticalScrollBar()
-        log_debug_busqueda(
-            f"gui: procesa lotes asunto={len(mails_por_asunto)} cuerpo={len(mails_por_cuerpo)} "
-            f"scroll={scroll.value()}/{scroll.maximum()}"
-        )
 
         try:
             mails_nuevos_por_cuerpo = self.procesar_lote_de_cuerpo(mails_por_cuerpo)
@@ -418,14 +413,7 @@ class Gui:
             )
             self.actualizar_cantidad_de_entcontrados()
         finally:
-            duracion = time.perf_counter() - inicio
-            scroll = self.mostrador_de_mails_encontrados.area.verticalScrollBar()
-            log_debug_busqueda(
-                f"gui: lotes procesados duracion={duracion:.3f}s "
-                f"scroll={scroll.value()}/{scroll.maximum()} "
-                f"resultados={self.sistema.cantidad_de_encontrados()}"
-            )
-            self.procesando_lotes = False
+           self.procesando_lotes = False
 
         if self.lotes_pendientes_por_asunto or self.lotes_pendientes_por_cuerpo:
             self.procesamiento_de_lotes_programado = True

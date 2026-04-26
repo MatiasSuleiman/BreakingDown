@@ -34,6 +34,7 @@ class Mostrador_de_mails:
         self.mails = []
         self.mails_por_clave = {}
         self.es_mail_por_asunto = {}
+        self.generacion_de_scroll = 0
 
         self.area = QScrollArea(master)
         self.area.setObjectName("mailPanelArea")
@@ -91,8 +92,54 @@ class Mostrador_de_mails:
         valor_clampeado = max(scroll.minimum(), min(valor, maximo))
         scroll.setValue(valor_clampeado)
 
-    def restaurar_scroll_vertical_despues_de_layout(self, valor):
-        QTimer.singleShot(0, lambda valor=valor: self.restaurar_scroll_vertical(valor))
+    def ancla_actual_del_scroll_vertical(self):
+        scroll = self.area.verticalScrollBar()
+        valor = scroll.value()
+        limite_inferior = valor + self.area.viewport().height()
+        ancla = {"clave": None, "desplazamiento": 0, "valor": valor}
+
+        for indice in range(self.layout.count()):
+            widget = self.layout.itemAt(indice).widget()
+            if widget is None:
+                continue
+
+            geometria = widget.geometry()
+            if geometria.bottom() >= valor and geometria.top() <= limite_inferior:
+                ancla["clave"] = widget.property("mailKey")
+                ancla["desplazamiento"] = geometria.top() - valor
+                break
+
+        return ancla
+
+    def restaurar_scroll_vertical_despues_de_layout(self, ancla, generacion, intentos=8):
+        if generacion != self.generacion_de_scroll:
+            return
+
+        self.layout.activate()
+        self.contenedor_de_mails.adjustSize()
+        scroll = self.area.verticalScrollBar()
+        maximo = scroll.maximum()
+        if maximo <= 0 and intentos > 0:
+            QTimer.singleShot(
+                0,
+                lambda ancla=ancla, generacion=generacion, intentos=intentos - 1:
+                    self.restaurar_scroll_vertical_despues_de_layout(ancla, generacion, intentos),
+            )
+            return
+        if maximo <= 0:
+            return
+
+        valor_a_restaurar = ancla["valor"]
+        clave = ancla["clave"]
+        if clave is not None:
+            for indice in range(self.layout.count()):
+                widget = self.layout.itemAt(indice).widget()
+                if widget is not None and widget.property("mailKey") == clave:
+                    valor_a_restaurar = widget.geometry().top() - ancla["desplazamiento"]
+                    break
+
+        valor_clampeado = max(scroll.minimum(), min(valor_a_restaurar, maximo))
+        scroll.setValue(valor_clampeado)
 
     def crear_texto_del_mail(self, frame, mail):
         texto_del_mail = QLabel(
@@ -109,6 +156,7 @@ class Mostrador_de_mails:
 
         frame = QFrame()
         frame.setObjectName("mailCard")
+        frame.setProperty("mailKey", self.clave_de_mail(mail))
         aplicar_rol_visual(frame, "panelRole", self.panel_role())
         aplicar_rol_visual(frame, "matchRole", rol_de_match)
         frame.setFrameShape(QFrame.Shape.StyledPanel)
@@ -179,7 +227,7 @@ class Mostrador_de_mails:
     def _registrar_mail(self, mail, es_por_asunto):
         cambio = self._registrar_mail_en_estado(mail, es_por_asunto)
         if cambio:
-            self._renderizar_desde_estado(preservar_scroll=True)
+            self._renderizar_desde_estado()
 
     def registrar_lotes_de_busqueda(
         self,
@@ -196,7 +244,7 @@ class Mostrador_de_mails:
             cambio = self._registrar_mail_en_estado(mail, True) or cambio
 
         if cambio:
-            self._renderizar_desde_estado(preservar_scroll=True)
+            self._renderizar_desde_estado()
 
     def _registrar_mail_en_estado(self, mail, es_por_asunto):
         clave = self.clave_de_mail(mail)
@@ -210,8 +258,10 @@ class Mostrador_de_mails:
             self.es_mail_por_asunto[clave] = es_por_asunto
         return cambio
 
-    def _renderizar_desde_estado(self, preservar_scroll=False):
-        valor_actual_del_scroll = self.valor_actual_del_scroll_vertical() if preservar_scroll else 0
+    def _renderizar_desde_estado(self):
+        ancla_del_scroll = self.ancla_actual_del_scroll_vertical()
+        self.generacion_de_scroll += 1
+        generacion_de_este_render = self.generacion_de_scroll
 
         self.area.setUpdatesEnabled(False)
         self.contenedor_de_mails.setUpdatesEnabled(False)
@@ -228,12 +278,17 @@ class Mostrador_de_mails:
             self.contenedor_de_mails.setUpdatesEnabled(True)
             self.area.setUpdatesEnabled(True)
 
-        if preservar_scroll:
-            self.restaurar_scroll_vertical_despues_de_layout(valor_actual_del_scroll)
+        QTimer.singleShot(
+            0,
+            lambda ancla=ancla_del_scroll, generacion=generacion_de_este_render:
+                self.restaurar_scroll_vertical_despues_de_layout(ancla, generacion),
+        )
 
     def mostrar(self, mails, es_mail_por_asunto=None):
 
-        valor_actual_del_scroll = self.valor_actual_del_scroll_vertical()
+        ancla_del_scroll = self.ancla_actual_del_scroll_vertical()
+        self.generacion_de_scroll += 1
+        generacion_de_este_render = self.generacion_de_scroll
         self.area.setUpdatesEnabled(False)
         self.contenedor_de_mails.setUpdatesEnabled(False)
 
@@ -258,7 +313,11 @@ class Mostrador_de_mails:
         finally:
             self.contenedor_de_mails.setUpdatesEnabled(True)
             self.area.setUpdatesEnabled(True)
-            self.restaurar_scroll_vertical_despues_de_layout(valor_actual_del_scroll)
+            QTimer.singleShot(
+                0,
+                lambda ancla=ancla_del_scroll, generacion=generacion_de_este_render:
+                    self.restaurar_scroll_vertical_despues_de_layout(ancla, generacion),
+            )
 
     def agregar_mail_renderizado(self, mail, es_por_asunto):
         raise NotImplementedError("subclass should implement agregar_mail_renderizado")

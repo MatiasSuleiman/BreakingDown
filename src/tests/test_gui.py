@@ -122,6 +122,23 @@ def flush_qt_events(app, cycles=3):
         app.processEvents()
 
 
+def primer_mail_visible(mostrador):
+    scroll = mostrador.area.verticalScrollBar()
+    valor = scroll.value()
+    limite_inferior = valor + mostrador.area.viewport().height()
+
+    for indice in range(mostrador.layout.count()):
+        widget = mostrador.layout.itemAt(indice).widget()
+        if widget is None:
+            continue
+
+        geometria = widget.geometry()
+        if geometria.bottom() >= valor and geometria.top() <= limite_inferior:
+            return widget.property("mailKey"), geometria.top() - valor
+
+    return None, 0
+
+
 def test_gui_inicia_con_filtros_ocultos():
     app = get_app()
     gui = Gui(FakeSistema())
@@ -288,6 +305,7 @@ def test_gui_preserva_scroll_al_recibir_un_lote_de_resultados():
     valor_esperado = max(1, scroll.maximum() // 2)
     scroll.setValue(valor_esperado)
     flush_qt_events(app)
+    clave_visible, desplazamiento_visible = primer_mail_visible(gui.mostrador_de_mails_encontrados)
 
     gui.al_recibir_lote_de_asunto(
         [
@@ -300,7 +318,11 @@ def test_gui_preserva_scroll_al_recibir_un_lote_de_resultados():
     )
     flush_qt_events(app)
 
-    assert scroll.value() == valor_esperado
+    nueva_clave_visible, nuevo_desplazamiento_visible = primer_mail_visible(
+        gui.mostrador_de_mails_encontrados
+    )
+    assert nueva_clave_visible == clave_visible
+    assert abs(nuevo_desplazamiento_visible - desplazamiento_visible) <= 1
     gui.ventana.close()
     app.quit()
 
