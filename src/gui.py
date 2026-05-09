@@ -12,6 +12,7 @@ from PyQt6.QtWidgets import (
     QLineEdit,
     QMainWindow,
     QMessageBox,
+    QComboBox,
     QPushButton,
     QSizePolicy,
     QTextBrowser,
@@ -110,6 +111,8 @@ class Hilo_de_busqueda(QThread):
 class Gui:
     TEXTO_BOTON_FILTROS_COLAPSADO = "Filtros ▾"
     TEXTO_BOTON_FILTROS_EXPANDIDO = "Filtros ▴"
+    TEXTO_ORDEN_SIN_ORDENAR = "Sin ordenar ▾"
+    TEXTO_ORDEN_FECHA = "Ordenar por fecha ▾"
 
     def __init__(self, sistema, al_volver_al_login=None):
         self.sistema = sistema
@@ -239,6 +242,18 @@ class Gui:
         self.boton_de_todos.clicked.connect(self.seleccionar_todos)
         fila_de_modos_de_busqueda.addWidget(self.boton_de_todos)
         fila_de_modos_de_busqueda.addStretch()
+
+        self.selector_de_orden = QComboBox(self.panel_de_controles)
+        self.selector_de_orden.addItem(
+            self.TEXTO_ORDEN_SIN_ORDENAR,
+            self.no_ordenar_mails,
+        )
+        self.selector_de_orden.addItem(
+            self.TEXTO_ORDEN_FECHA,
+            self.ordenar_mails_por_fecha,
+        )
+        self.selector_de_orden.activated.connect(self.cambiar_orden_de_mails)
+        fila_de_modos_de_busqueda.addWidget(self.selector_de_orden)
 
         self.indicador_de_busqueda = QLabel("", self.panel_de_controles)
         self.indicador_de_busqueda.setObjectName("statusLabel")
@@ -525,6 +540,16 @@ class Gui:
                 f"No se pudo seleccionar la carpeta.\n{error}",
             )
 
+    def cambiar_orden_de_mails(self, _indice=None):
+        self.selector_de_orden.currentData()()
+
+    def no_ordenar_mails(self):
+        pass
+
+    def ordenar_mails_por_fecha(self):
+        self.mostrador_de_mails_encontrados.ordenar_por_fecha()
+        self.mostrador_de_mails_del_break.ordenar_por_fecha()
+
     def restaurar_selector_de_carpeta(self, carpeta):
         botones = (self.boton_de_recibidos, self.boton_de_enviados, self.boton_de_todos)
         for boton in botones:
@@ -573,10 +598,12 @@ class Gui:
             self.sistema.mails_del_breakdown,
             self.mail_fue_encontrado_por_asunto,
         )
+        posicion_previa = self.mostrador_de_mails_encontrados.valor_del_scroll()
         self.mostrador_de_mails_encontrados.mostrar(
             self.sistema.ver_todos_los_mails_encontrados(),
             self.mail_fue_encontrado_por_asunto,
         )
+        self.mostrador_de_mails_encontrados.cambiar_valor_del_scroll(posicion_previa)
 
     def quitar_mail(self, mail):
         self.sistema.quitar_mail_del_breakdown(mail)

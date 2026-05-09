@@ -6,7 +6,7 @@ import sys
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt6.QtGui import QIntValidator
-from PyQt6.QtWidgets import QApplication, QLabel, QLineEdit, QVBoxLayout, QWidget
+from PyQt6.QtWidgets import QApplication, QLabel, QLineEdit, QWidget
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -61,33 +61,11 @@ def flush_qt_events(app, cycles=6):
         app.processEvents()
 
 
-def primer_mail_visible(mostrador):
-    scroll = mostrador.area.verticalScrollBar()
-    valor = scroll.value()
-    limite_inferior = valor + mostrador.area.viewport().height()
-
-    for indice in range(mostrador.layout.count()):
-        widget = mostrador.layout.itemAt(indice).widget()
-        if widget is None:
-            continue
-
-        geometria = widget.geometry()
-        if geometria.bottom() >= valor and geometria.top() <= limite_inferior:
-            return widget.property("mailKey"), geometria.top() - valor
-
-    return None, 0
-
-
-def crear_mostrador_buscados_con_scroll():
-    master = QWidget()
-    layout = QVBoxLayout(master)
-    layout.setContentsMargins(0, 0, 0, 0)
-    ui = FakeUi()
-    mostrador = Mostrador_de_mails_buscados.en(master, 700, 610, 20, 180, ui)
-    layout.addWidget(mostrador.area)
-    master.resize(500, 360)
-    master.show()
-    return master, mostrador
+def claves_renderizadas(mostrador):
+    return [
+        mostrador.layout.itemAt(indice).widget().property("mailKey")
+        for indice in range(mostrador.layout.count())
+    ]
 
 
 def test_mostrador_del_break_muestra_barra_de_minutos():
@@ -156,6 +134,37 @@ def test_mostrador_puede_actualizar_un_mail_a_match_por_asunto():
     app.quit()
 
 
+def test_mostrador_sin_ordenar_preserva_el_orden_de_llegada():
+    app = get_app()
+    master = QWidget()
+    ui = FakeUi()
+    fecha_base = datetime(2026, 3, 6, 12, 0, 0)
+    mail_viejo = make_mail("viejo", date=fecha_base)
+    mail_reciente = make_mail("reciente", date=fecha_base + timedelta(days=1))
+    mostrador = Mostrador_de_mails_buscados.en(master, 700, 610, 20, 180, ui)
+
+    mostrador.mostrar([mail_viejo, mail_reciente])
+
+    assert claves_renderizadas(mostrador) == ["viejo", "reciente"]
+    app.quit()
+
+
+def test_mostrador_puede_ordenar_por_fecha_descendente():
+    app = get_app()
+    master = QWidget()
+    ui = FakeUi()
+    fecha_base = datetime(2026, 3, 6, 12, 0, 0)
+    mail_viejo = make_mail("viejo", date=fecha_base)
+    mail_reciente = make_mail("reciente", date=fecha_base + timedelta(days=1))
+    mostrador = Mostrador_de_mails_buscados.en(master, 700, 610, 20, 180, ui)
+
+    mostrador.mostrar([mail_viejo, mail_reciente])
+    mostrador.ordenar_por_fecha()
+
+    assert claves_renderizadas(mostrador) == ["reciente", "viejo"]
+    app.quit()
+
+
 def test_mostrador_registra_lotes_en_un_solo_render():
     app = get_app()
     master = QWidget()
@@ -182,83 +191,4 @@ def test_mostrador_registra_lotes_en_un_solo_render():
     assert len(renders) == 1
     assert len(tarjetas) == 1
     assert tarjetas[0].property("matchRole") == "subject"
-    app.quit()
-
-
-def test_mostrador_preserva_mail_visible_cuando_entran_mails_mas_recientes():
-    app = get_app()
-    master, mostrador = crear_mostrador_buscados_con_scroll()
-    fecha_base = datetime(2026, 3, 6, 12, 0, 0)
-
-    mostrador.mostrar(
-        [
-            make_mail(
-                f"mail-{indice}",
-                date=fecha_base + timedelta(minutes=indice),
-            )
-            for indice in range(40)
-        ]
-    )
-    flush_qt_events(app)
-
-    scroll = mostrador.area.verticalScrollBar()
-    assert scroll.maximum() > 0
-    scroll.setValue(scroll.maximum() // 2)
-    flush_qt_events(app)
-    clave_visible, desplazamiento_visible = primer_mail_visible(mostrador)
-
-    mostrador.registrar_lotes_de_busqueda(
-        mails_por_asunto=[
-            make_mail(
-                f"nuevo-{indice}",
-                date=fecha_base + timedelta(days=1, minutes=indice),
-            )
-            for indice in range(5)
-        ]
-    )
-    flush_qt_events(app, cycles=12)
-
-    nueva_clave_visible, nuevo_desplazamiento_visible = primer_mail_visible(mostrador)
-    assert nueva_clave_visible == clave_visible
-    assert abs(nuevo_desplazamiento_visible - desplazamiento_visible) <= 1
-    master.close()
-    app.quit()
-
-
-def test_mostrador_reintenta_restaurar_scroll_si_el_layout_aun_no_tiene_rango():
-    app = get_app()
-    master, mostrador = crear_mostrador_buscados_con_scroll()
-    ancla = {"clave": None, "desplazamiento": 0, "valor": 120}
-    generacion = mostrador.generacion_de_scroll
-
-    mostrador.restaurar_scroll_vertical_despues_de_layout(ancla, generacion)
-    for indice in range(40):
-        mostrador.agregar_mail_renderizado(make_mail(f"mail-{indice}"), False)
-    flush_qt_events(app, cycles=12)
-
-    scroll = mostrador.area.verticalScrollBar()
-    assert scroll.maximum() >= 120
-    assert scroll.value() == 120
-    master.close()
-    app.quit()
-
-
-def test_mostrador_ignora_restauracion_de_scroll_vieja():
-    app = get_app()
-    master, mostrador = crear_mostrador_buscados_con_scroll()
-    mostrador.mostrar([make_mail(f"mail-{indice}") for indice in range(40)])
-    flush_qt_events(app)
-
-    scroll = mostrador.area.verticalScrollBar()
-    scroll.setValue(30)
-    generacion_vieja = mostrador.generacion_de_scroll
-    mostrador.generacion_de_scroll += 1
-
-    mostrador.restaurar_scroll_vertical_despues_de_layout(
-        {"clave": None, "desplazamiento": 0, "valor": 200},
-        generacion_vieja,
-    )
-
-    assert scroll.value() == 30
-    master.close()
     app.quit()

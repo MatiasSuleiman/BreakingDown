@@ -122,21 +122,11 @@ def flush_qt_events(app, cycles=3):
         app.processEvents()
 
 
-def primer_mail_visible(mostrador):
-    scroll = mostrador.area.verticalScrollBar()
-    valor = scroll.value()
-    limite_inferior = valor + mostrador.area.viewport().height()
-
-    for indice in range(mostrador.layout.count()):
-        widget = mostrador.layout.itemAt(indice).widget()
-        if widget is None:
-            continue
-
-        geometria = widget.geometry()
-        if geometria.bottom() >= valor and geometria.top() <= limite_inferior:
-            return widget.property("mailKey"), geometria.top() - valor
-
-    return None, 0
+def claves_renderizadas(mostrador):
+    return [
+        mostrador.layout.itemAt(indice).widget().property("mailKey")
+        for indice in range(mostrador.layout.count())
+    ]
 
 
 def test_gui_inicia_con_filtros_ocultos():
@@ -202,6 +192,68 @@ def test_filtros_conservan_valores_al_ocultarse_y_mostrarse():
     assert gui.mostrador_de_condiciones.barra_de_cuerpo.text() == "invoice"
     assert gui.mostrador_de_condiciones.barra_de_enviado_antes_de.text() == "24/04/2026"
     assert gui.mostrador_de_condiciones.barra_de_enviado_despues_de.text() == "01/04/2026"
+
+    gui.ventana.close()
+    app.quit()
+
+
+def test_selector_de_orden_inicia_sin_ordenar_y_esta_junto_a_las_carpetas():
+    app = get_app()
+    gui = Gui(FakeSistema())
+    flush_qt_events(app)
+
+    assert gui.selector_de_orden.currentText() == Gui.TEXTO_ORDEN_SIN_ORDENAR
+    assert gui.selector_de_orden.parent() is gui.panel_de_controles
+    assert abs(gui.selector_de_orden.y() - gui.boton_de_todos.y()) <= 2
+    assert gui.selector_de_orden.x() > gui.boton_de_todos.x()
+
+    gui.ventana.close()
+    app.quit()
+
+
+def test_selector_de_orden_por_fecha_ordena_los_mails_visibles_y_nuevos_lotes():
+    app = get_app()
+    gui = Gui(FakeSistema())
+    fecha_base = datetime(2026, 3, 6, 12, 0, 0)
+    mail_viejo = make_mail("viejo", date=fecha_base)
+    mail_reciente = make_mail("reciente", date=fecha_base + timedelta(days=1))
+    mail_mas_reciente = make_mail("mas-reciente", date=fecha_base + timedelta(days=2))
+
+    gui.al_recibir_lote_de_asunto([mail_viejo, mail_reciente])
+    flush_qt_events(app)
+    assert claves_renderizadas(gui.mostrador_de_mails_encontrados) == ["viejo", "reciente"]
+
+    gui.selector_de_orden.setCurrentText(Gui.TEXTO_ORDEN_FECHA)
+    gui.cambiar_orden_de_mails()
+    assert claves_renderizadas(gui.mostrador_de_mails_encontrados) == ["reciente", "viejo"]
+
+    gui.al_recibir_lote_de_asunto([mail_mas_reciente])
+    flush_qt_events(app)
+    assert claves_renderizadas(gui.mostrador_de_mails_encontrados) == [
+        "mas-reciente",
+        "reciente",
+        "viejo",
+    ]
+
+    gui.ventana.close()
+    app.quit()
+
+
+def test_selector_sin_ordenar_vuelve_al_orden_de_llegada():
+    app = get_app()
+    gui = Gui(FakeSistema())
+    fecha_base = datetime(2026, 3, 6, 12, 0, 0)
+    mail_viejo = make_mail("viejo", date=fecha_base)
+    mail_reciente = make_mail("reciente", date=fecha_base + timedelta(days=1))
+
+    gui.al_recibir_lote_de_asunto([mail_viejo, mail_reciente])
+    flush_qt_events(app)
+    gui.selector_de_orden.setCurrentText(Gui.TEXTO_ORDEN_FECHA)
+    gui.cambiar_orden_de_mails()
+    gui.selector_de_orden.setCurrentText(Gui.TEXTO_ORDEN_SIN_ORDENAR)
+    gui.cambiar_orden_de_mails()
+
+    assert claves_renderizadas(gui.mostrador_de_mails_encontrados) == ["viejo", "reciente"]
 
     gui.ventana.close()
     app.quit()
@@ -284,49 +336,6 @@ def test_mail_de_cuerpo_que_luego_llega_por_asunto_se_actualiza_sin_duplicarse_y
     app.quit()
 
 
-def test_gui_preserva_scroll_al_recibir_un_lote_de_resultados():
-    app = get_app()
-    gui = Gui(FakeSistema())
-    fecha_base = datetime(2026, 3, 6, 12, 0, 0)
-
-    gui.al_recibir_lote_de_asunto(
-        [
-            make_mail(
-                str(indice),
-                date=fecha_base + timedelta(minutes=indice),
-            )
-            for indice in range(30)
-        ]
-    )
-    flush_qt_events(app)
-
-    scroll = gui.mostrador_de_mails_encontrados.area.verticalScrollBar()
-    assert scroll.maximum() > 0
-    valor_esperado = max(1, scroll.maximum() // 2)
-    scroll.setValue(valor_esperado)
-    flush_qt_events(app)
-    clave_visible, desplazamiento_visible = primer_mail_visible(gui.mostrador_de_mails_encontrados)
-
-    gui.al_recibir_lote_de_asunto(
-        [
-            make_mail(
-                f"nuevo-{indice}",
-                date=fecha_base + timedelta(minutes=60 + indice),
-            )
-            for indice in range(3)
-        ]
-    )
-    flush_qt_events(app)
-
-    nueva_clave_visible, nuevo_desplazamiento_visible = primer_mail_visible(
-        gui.mostrador_de_mails_encontrados
-    )
-    assert nueva_clave_visible == clave_visible
-    assert abs(nuevo_desplazamiento_visible - desplazamiento_visible) <= 1
-    gui.ventana.close()
-    app.quit()
-
-
 def test_gui_coalescea_lotes_pendientes_en_un_solo_render():
     app = get_app()
     gui = Gui(FakeSistema())
@@ -350,19 +359,6 @@ def test_gui_coalescea_lotes_pendientes_en_un_solo_render():
     assert len(llamadas_de_render) == 1
     assert len(tarjetas_encontradas) == 2
     assert gui.sistema.cantidad_de_encontrados() == 2
-
-    gui.ventana.close()
-    app.quit()
-
-
-def test_gui_clampea_scroll_si_el_contenido_deja_de_tener_scroll():
-    app = get_app()
-    gui = Gui(FakeSistema())
-
-    gui.mostrador_de_mails_encontrados.restaurar_scroll_vertical(9999)
-
-    scroll = gui.mostrador_de_mails_encontrados.area.verticalScrollBar()
-    assert scroll.value() == 0
 
     gui.ventana.close()
     app.quit()

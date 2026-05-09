@@ -37,6 +37,7 @@ QLabel#resultCountLabel {
 }
 
 QLineEdit,
+QComboBox,
 QTextEdit,
 QTextBrowser {
     background: #ffffff;
@@ -49,10 +50,21 @@ QTextBrowser {
 }
 
 QLineEdit:focus,
+QComboBox:focus,
 QTextEdit:focus,
 QTextBrowser:focus {
     border: 1px solid #2f6fed;
     background: #fdfefe;
+}
+
+QComboBox {
+    padding: 5px 28px 5px 10px;
+    font-weight: 600;
+}
+
+QComboBox::drop-down {
+    border: none;
+    width: 24px;
 }
 
 QLineEdit[inputRole="minutes"] {
