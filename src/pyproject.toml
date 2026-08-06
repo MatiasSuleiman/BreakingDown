@@ -47,7 +47,8 @@ project_name = "BreakingDown"
 bundle = "com.breakingdown"
 version = "1.1.0"
 url = "https://example.com/breakingdown"
-license = { text = "Proprietary" }
+license = "LicenseRef-Proprietary"
+license-files = ["LICENSE"]
 author = "BreakingDown"
 author_email = "dev@breakingdown.local"
 
@@ -81,4 +82,4 @@ requires = [
 ]
 
 [tool.briefcase.app.breakingdown.macOS]
-universal_build = true
+universal_build = false

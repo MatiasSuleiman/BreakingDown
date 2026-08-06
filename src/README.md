@@ -16,6 +16,10 @@ python3 -m briefcase build
 python3 -m briefcase package
 ```
 
+On Apple Silicon Macs, this project builds an arm64-only macOS app. Keep the
+project in a path without spaces before running Briefcase commands, for example
+`~/Projects/BreakingDown/src`.
+
 ## Build macOS On GitHub
 
 If you do not have a Mac, use the GitHub Actions workflow at
