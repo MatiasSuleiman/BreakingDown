@@ -23,11 +23,25 @@ from PyQt6.QtWidgets import (
 try:
     from src.mostrador_de_condiciones import Mostrador_de_condiciones
     from src.mostrador_de_mails import Mostrador_de_mails_buscados, Mostrador_de_mails_del_break
-    from src.ui_theme import aplicar_rol_de_boton, aplicar_tema_compartido
+    from src.ui_theme import (
+        aplicar_rol_de_boton,
+        aplicar_tema_compartido,
+        aumentar_zoom_de_fuente,
+        establecer_zoom_de_fuente,
+        posicionar_ventana_en_mitad_izquierda,
+        reducir_zoom_de_fuente,
+    )
 except ModuleNotFoundError:
     from mostrador_de_condiciones import Mostrador_de_condiciones
     from mostrador_de_mails import Mostrador_de_mails_buscados, Mostrador_de_mails_del_break
-    from ui_theme import aplicar_rol_de_boton, aplicar_tema_compartido
+    from ui_theme import (
+        aplicar_rol_de_boton,
+        aplicar_tema_compartido,
+        aumentar_zoom_de_fuente,
+        establecer_zoom_de_fuente,
+        posicionar_ventana_en_mitad_izquierda,
+        reducir_zoom_de_fuente,
+    )
 
 
 def log_debug_busqueda(mensaje):
@@ -113,6 +127,7 @@ class Gui:
     TEXTO_BOTON_FILTROS_EXPANDIDO = "Filtros ▴"
     TEXTO_ORDEN_SIN_ORDENAR = "Sin ordenar ▾"
     TEXTO_ORDEN_FECHA = "Ordenar por fecha ▾"
+    TEXTO_SELECTOR_DE_ZOOM = "Zoom"
 
     def __init__(self, sistema, al_volver_al_login=None):
         self.sistema = sistema
@@ -265,6 +280,32 @@ class Gui:
         self.cantidad_de_encontrados.hide()
         fila_de_estado.addWidget(self.cantidad_de_encontrados)
 
+        fila_de_zoom = QHBoxLayout()
+        fila_de_zoom.setSpacing(8)
+        layout_principal.addLayout(fila_de_zoom)
+        fila_de_zoom.addStretch()
+
+        self.selector_de_zoom = QComboBox(self.area_de_contenido)
+        self.selector_de_zoom.setFixedWidth(120)
+        self.selector_de_zoom.addItem(self.TEXTO_SELECTOR_DE_ZOOM, None)
+        for porcentaje in (50, 100, 150, 200, 250):
+            self.selector_de_zoom.addItem(f"{porcentaje}%", porcentaje / 100)
+        self.selector_de_zoom.setCurrentIndex(0)
+        self.selector_de_zoom.activated.connect(self.cambiar_zoom_desde_selector)
+        fila_de_zoom.addWidget(self.selector_de_zoom)
+
+        self.boton_de_reducir_zoom = QPushButton("-", self.area_de_contenido)
+        aplicar_rol_de_boton(self.boton_de_reducir_zoom, "secondary")
+        self.boton_de_reducir_zoom.setFixedWidth(36)
+        self.boton_de_reducir_zoom.clicked.connect(self.reducir_zoom)
+        fila_de_zoom.addWidget(self.boton_de_reducir_zoom)
+
+        self.boton_de_aumentar_zoom = QPushButton("+", self.area_de_contenido)
+        aplicar_rol_de_boton(self.boton_de_aumentar_zoom, "secondary")
+        self.boton_de_aumentar_zoom.setFixedWidth(36)
+        self.boton_de_aumentar_zoom.clicked.connect(self.aumentar_zoom)
+        fila_de_zoom.addWidget(self.boton_de_aumentar_zoom)
+
         fila_mostradores = QHBoxLayout()
         fila_mostradores.setSpacing(18)
         layout_principal.addLayout(fila_mostradores, 1)
@@ -288,6 +329,23 @@ class Gui:
 
         self.seleccionar_recibidos()
         self.ventana.show()
+
+    def cambiar_zoom_desde_selector(self, indice):
+        zoom = self.selector_de_zoom.itemData(indice)
+        if zoom is not None:
+            establecer_zoom_de_fuente(zoom)
+        self.restaurar_texto_del_selector_de_zoom()
+
+    def aumentar_zoom(self, _checked=False):
+        aumentar_zoom_de_fuente()
+        self.restaurar_texto_del_selector_de_zoom()
+
+    def reducir_zoom(self, _checked=False):
+        reducir_zoom_de_fuente()
+        self.restaurar_texto_del_selector_de_zoom()
+
+    def restaurar_texto_del_selector_de_zoom(self):
+        self.selector_de_zoom.setCurrentIndex(0)
 
     def clave_de_mail(self, mail):
         return getattr(mail, "uid", id(mail))
@@ -576,6 +634,7 @@ class Gui:
         caja_de_texto.setPlainText(f"{mail.subject}\n\t{mail.text}")
         layout.addWidget(caja_de_texto)
 
+        posicionar_ventana_en_mitad_izquierda(ventana_del_mail)
         ventana_del_mail.show()
         ventana_del_mail.raise_()
         ventana_del_mail.activateWindow()

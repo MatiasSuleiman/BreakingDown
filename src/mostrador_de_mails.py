@@ -17,10 +17,18 @@ from PyQt6.QtWidgets import (
 
 try:
     from src.buscador_adapter import normalizar_datetime_naive
-    from src.ui_theme import aplicar_rol_de_boton, aplicar_rol_visual
+    from src.ui_theme import (
+        aplicar_rol_de_boton,
+        aplicar_rol_visual,
+        posicionar_ventana_en_mitad_derecha,
+    )
 except ModuleNotFoundError:
     from buscador_adapter import normalizar_datetime_naive
-    from ui_theme import aplicar_rol_de_boton, aplicar_rol_visual
+    from ui_theme import (
+        aplicar_rol_de_boton,
+        aplicar_rol_visual,
+        posicionar_ventana_en_mitad_derecha,
+    )
 
 
 class Mostrador_de_mails:
@@ -129,7 +137,7 @@ class Mostrador_de_mails:
         ventana_de_descripcion = QDialog(self.contenedor_de_mails)
         ventana_de_descripcion.setObjectName("descriptionDialog")
         ventana_de_descripcion.setWindowTitle(f"{mail.subject} description")
-        ventana_de_descripcion.resize(520, 380)
+        ventana_de_descripcion.resize(780, 570)
 
         layout = QVBoxLayout(ventana_de_descripcion)
         layout.setContentsMargins(16, 16, 16, 16)
@@ -144,6 +152,7 @@ class Mostrador_de_mails:
         )
         layout.addWidget(lector_de_texto)
 
+        posicionar_ventana_en_mitad_derecha(ventana_de_descripcion)
         ventana_de_descripcion.show()
         ventana_de_descripcion.raise_()
         ventana_de_descripcion.activateWindow()

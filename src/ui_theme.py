@@ -1,7 +1,26 @@
+from string import Template
+
+from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import QApplication
 
 
-APP_STYLESHEET = """
+ZOOM_DE_FUENTE = 1.0
+ZOOM_MINIMO_DE_FUENTE = 0.5
+ZOOM_MAXIMO_DE_FUENTE = 2.5
+PASO_DE_ZOOM_DE_FUENTE = 0.1
+_FUENTE_BASE_DE_APP = None
+
+
+def _tamanio_de_fuente(base):
+    return max(1, round(base * ZOOM_DE_FUENTE))
+
+
+def _limitar_zoom_de_fuente(zoom):
+    return round(max(ZOOM_MINIMO_DE_FUENTE, min(ZOOM_MAXIMO_DE_FUENTE, zoom)), 2)
+
+
+def _stylesheet():
+    return Template("""
 QMainWindow#mainWindow,
 QMainWindow#loginWindow,
 QDialog {
@@ -18,21 +37,23 @@ QWidget#loginContent {
 
 QLabel {
     color: #334155;
+    font-size: ${fuente_normal}px;
 }
 
 QLabel#screenTitle {
     color: #16314f;
-    font-size: 18px;
+    font-size: ${fuente_titulo}px;
     font-weight: 600;
 }
 
 QLabel#statusLabel {
     color: #45627f;
-    font-size: 12px;
+    font-size: ${fuente_estado}px;
 }
 
 QLabel#resultCountLabel {
     color: #1d4ed8;
+    font-size: ${fuente_normal}px;
     font-weight: 600;
 }
 
@@ -44,6 +65,7 @@ QTextBrowser {
     border: 1px solid #cfdae8;
     border-radius: 10px;
     color: #1f2a37;
+    font-size: ${fuente_normal}px;
     padding: 8px 10px;
     selection-background-color: #2f6fed;
     selection-color: #ffffff;
@@ -58,6 +80,7 @@ QTextBrowser:focus {
 }
 
 QComboBox {
+    font-size: ${fuente_normal}px;
     padding: 5px 28px 5px 10px;
     font-weight: 600;
 }
@@ -79,6 +102,7 @@ QPushButton {
     color: #27415a;
     border: 1px solid #cfdae8;
     border-radius: 10px;
+    font-size: ${fuente_normal}px;
     padding: 5px 10px;
     font-weight: 600;
 }
@@ -165,6 +189,7 @@ QGroupBox#filtersPanel {
     border-radius: 16px;
     margin-top: 0px;
     color: #16314f;
+    font-size: ${fuente_normal}px;
     font-weight: 600;
 }
 
@@ -222,6 +247,7 @@ QFrame#mailCard[matchRole="subject"] {
 
 QLabel#mailText {
     color: #24384d;
+    font-size: ${fuente_normal}px;
     line-height: 1.35;
 }
 
@@ -229,6 +255,7 @@ QDialog QTextEdit#descriptionEditor,
 QDialog QTextBrowser#mailViewer {
     background: #ffffff;
     border-radius: 12px;
+    font-size: ${fuente_normal}px;
 }
 
 QScrollBar:vertical {
@@ -262,14 +289,92 @@ QScrollBar::sub-page:horizontal {
     height: 0px;
     width: 0px;
 }
-"""
+""").substitute(
+        fuente_normal=_tamanio_de_fuente(13),
+        fuente_titulo=_tamanio_de_fuente(18),
+        fuente_estado=_tamanio_de_fuente(12),
+    )
+
+
+def _aplicar_fuente_base_con_zoom(app):
+    global _FUENTE_BASE_DE_APP
+
+    if _FUENTE_BASE_DE_APP is None:
+        _FUENTE_BASE_DE_APP = QFont(app.font())
+
+    fuente = QFont(_FUENTE_BASE_DE_APP)
+    tamanio_base = fuente.pointSizeF()
+    if tamanio_base > 0:
+        fuente.setPointSizeF(max(1.0, tamanio_base * ZOOM_DE_FUENTE))
+    app.setFont(fuente)
 
 
 def aplicar_tema_compartido():
     app = QApplication.instance()
     if app is None:
         return
-    app.setStyleSheet(APP_STYLESHEET)
+    _aplicar_fuente_base_con_zoom(app)
+    app.setStyleSheet(_stylesheet())
+
+
+def posicionar_ventana_en_mitad_izquierda(ventana):
+    _posicionar_ventana_en_mitad_de_pantalla(ventana, "izquierda")
+
+
+def posicionar_ventana_en_mitad_derecha(ventana):
+    _posicionar_ventana_en_mitad_de_pantalla(ventana, "derecha")
+
+
+def _posicionar_ventana_en_mitad_de_pantalla(ventana, lado):
+    pantalla = ventana.screen()
+    if pantalla is None:
+        app = QApplication.instance()
+        pantalla = app.primaryScreen() if app is not None else None
+    if pantalla is None:
+        return
+
+    disponible = pantalla.availableGeometry()
+    ancho_izquierdo = disponible.width() // 2
+    ancho_derecho = disponible.width() - ancho_izquierdo
+
+    if lado == "derecha":
+        inicio_x = disponible.x() + ancho_izquierdo
+        ancho_zona = ancho_derecho
+    else:
+        inicio_x = disponible.x()
+        ancho_zona = ancho_izquierdo
+
+    x = inicio_x + (ancho_zona - ventana.width()) // 2
+    y = disponible.y() + (disponible.height() - ventana.height()) // 2
+    x = _limitar(x, disponible.left(), disponible.right() - ventana.width() + 1)
+    y = _limitar(y, disponible.top(), disponible.bottom() - ventana.height() + 1)
+    ventana.move(x, y)
+
+
+def _limitar(valor, minimo, maximo):
+    if maximo < minimo:
+        return minimo
+    return max(minimo, min(maximo, valor))
+
+
+def establecer_zoom_de_fuente(zoom):
+    global ZOOM_DE_FUENTE
+
+    ZOOM_DE_FUENTE = _limitar_zoom_de_fuente(zoom)
+    aplicar_tema_compartido()
+    return ZOOM_DE_FUENTE
+
+
+def aumentar_zoom_de_fuente():
+    return establecer_zoom_de_fuente(ZOOM_DE_FUENTE + PASO_DE_ZOOM_DE_FUENTE)
+
+
+def reducir_zoom_de_fuente():
+    return establecer_zoom_de_fuente(ZOOM_DE_FUENTE - PASO_DE_ZOOM_DE_FUENTE)
+
+
+def obtener_zoom_de_fuente():
+    return ZOOM_DE_FUENTE
 
 
 def aplicar_rol_de_boton(boton, rol):
